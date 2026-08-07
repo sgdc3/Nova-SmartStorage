@@ -44,11 +44,12 @@ class StorageTerminal(
             "x x x x x x x x o",
             "x x x x x x x x f",
             "x x x x x x x x d",
-            "i i i i i i i i ."
+            "i i i i i i i i n"
         ) {
             's' by searchButton()
             'o' by sortButton(sortMode)
             'f' by clearFilterButton(filter)
+            'n' by networkItem
             'i' by depositInventory.with(depositBackground())
         }
 

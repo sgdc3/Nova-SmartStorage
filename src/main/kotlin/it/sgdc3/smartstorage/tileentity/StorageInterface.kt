@@ -1,6 +1,7 @@
 package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.gui.ClickableItem
+import it.sgdc3.smartstorage.gui.networkStatusIcon
 import it.sgdc3.smartstorage.gui.priorityIcon
 import it.sgdc3.smartstorage.network.DEFAULT_PRIORITY
 import it.sgdc3.smartstorage.network.FluidGateway
@@ -10,6 +11,7 @@ import it.sgdc3.smartstorage.network.PRIORITY_RANGE
 import it.sgdc3.smartstorage.network.StorageEndPoint
 import it.sgdc3.smartstorage.network.StorageHolder
 import it.sgdc3.smartstorage.network.StorageNetwork
+import it.sgdc3.smartstorage.network.TransferBudget
 import it.sgdc3.smartstorage.registry.Blocks.STORAGE_INTERFACE
 import it.sgdc3.smartstorage.registry.GuiItems
 import it.sgdc3.smartstorage.registry.GuiTextures
@@ -30,6 +32,9 @@ import xyz.xenondevs.invui.inventory.VirtualInventory
 import xyz.xenondevs.invui.inventory.event.ItemPreUpdateEvent
 import xyz.xenondevs.invui.item.ItemBuilder
 import xyz.xenondevs.invui.window.Window
+import xyz.xenondevs.nova.addon.simpleupgrades.gui.OpenUpgradesItem
+import xyz.xenondevs.nova.addon.simpleupgrades.registry.UpgradeTypes
+import xyz.xenondevs.nova.addon.simpleupgrades.storedUpgradeHolder
 import xyz.xenondevs.nova.config.entry
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
@@ -57,10 +62,14 @@ import xyz.xenondevs.nova.world.block.tileentity.network.type.item.holder.ItemHo
 import xyz.xenondevs.nova.world.format.NetworkState
 import xyz.xenondevs.nova.world.item.DefaultGuiItems
 import xyz.xenondevs.nova.world.item.NovaItem
+import xyz.xenondevs.nova.util.NumberFormatUtils
 import java.util.UUID
 import kotlin.math.max
+import kotlin.math.roundToLong
 
 private val EXPOSED_SLOTS by STORAGE_INTERFACE.config.entry<Int>("exposed_slots")
+private val BASE_ITEM_TRANSFER by STORAGE_INTERFACE.config.entry<Double>("base_item_transfer")
+private val BASE_FLUID_TRANSFER by STORAGE_INTERFACE.config.entry<Double>("base_fluid_transfer")
 
 /**
  * How often the neighbours are re-read for the menu icons. Nothing routes on this, so a second is well
@@ -100,8 +109,13 @@ private val NEIGHBOUR_RESCAN_TICKS by STORAGE_INTERFACE.config.entry<Int>("neigh
  * config to it: turning extraction on for a side with no filter turns straight back off, and pulling the
  * filter out of a side that was extracting closes it.
  *
- * Fluids are governed by the same slot, named by the bucket that carries them — the same trick a storage
- * connector's filter uses. A side hands out lava when its extract filter says a lava bucket may pass.
+ * **This is about items only.** Fluids used to be governed by the same slot, named by the bucket that
+ * carries them, and it was the wrong shape for them: a filter is a list of the many things that may
+ * pass, while a fluid side already deals in exactly one of the two fluids there are — the picker on the
+ * side says which. Requiring a bucket in the filter as well made one slot mean two unrelated things
+ * depending on what was mounted, and gave a player who had filtered a chest a tank that quietly stopped
+ * filling. A fluid side is governed by its own two switches and its picker; extraction still starts
+ * closed, so nothing leaves before somebody opens it.
  *
  * ## What it looks like
  *
@@ -123,7 +137,23 @@ class StorageInterface(
     @Volatile
     override var storageNetwork: StorageNetwork? = null
 
-    private val networkView = NetworkView(this, uuid, EXPOSED_SLOTS)
+    private val upgradeHolder = storedUpgradeHolder(UpgradeTypes.SPEED)
+
+    /**
+     * What this interface will move in one network tick, per resource and per direction.
+     *
+     * A storage interface is the seam between a virtual system that holds everything and a world that
+     * moves things one at a time, and without a rate of its own it was not a seam at all: Nova takes a
+     * network's throughput from its *cables*, and an interface bolted straight onto a tank has none — so
+     * the whole system emptied into that tank in a single tick. It is now slow out of the box and as
+     * fast as a player has paid for. See [TransferBudget].
+     */
+    private val itemInput = TransferBudget()
+    private val itemOutput = TransferBudget()
+    private val fluidInput = TransferBudget()
+    private val fluidOutput = TransferBudget()
+
+    private val networkView = NetworkView(this, uuid, EXPOSED_SLOTS, itemInput, itemOutput)
     private val itemHolder = storedItemHolder(networkView to NetworkConnectionType.BUFFER)
 
     /**
@@ -133,7 +163,13 @@ class StorageInterface(
      * face's chosen container by UUID, and a random one per load would scramble every side config.
      */
     private val fluidViews: List<NetworkFluidView> = FluidType.entries.map { fluid ->
-        NetworkFluidView(this, UUID.nameUUIDFromBytes("$uuid:${fluid.name}".toByteArray()), fluid)
+        NetworkFluidView(
+            this,
+            UUID.nameUUIDFromBytes("$uuid:${fluid.name}".toByteArray()),
+            fluid,
+            fluidInput,
+            fluidOutput
+        )
     }
 
     /**
@@ -182,7 +218,11 @@ class StorageInterface(
      * the menus [menuContainer] counts, and the whole point is the icon inside it.
      */
     override fun handleTick() {
-        setPowered(storageNetwork?.isOnline == true)
+        refillBudgets()
+
+        // the lamp in the menu says what the core's own light says, so one signal redraws both
+        if (setPowered(storageNetwork?.isOnline == true))
+            menuContainer.forEachMenu(StorageInterfaceMenu::update)
 
         if (serverTick % max(1, NEIGHBOUR_RESCAN_TICKS) != 0)
             return
@@ -268,22 +308,10 @@ class StorageInterface(
         var changed = false
 
         for (face in CUBE_FACES) {
-            val filter = itemHolder.extractFilters[face]
-
-            val items = itemHolder.connectionConfig[face]
-            if (items != null && items.extract && filter == null) {
+            val items = itemHolder.connectionConfig[face] ?: continue
+            if (items.extract && itemHolder.extractFilters[face] == null) {
                 itemHolder.connectionConfig[face] = NetworkConnectionType.of(items.insert, false)
                 changed = true
-            }
-
-            val fluids = fluidHolder.connectionConfig[face]
-            if (fluids != null && fluids.extract) {
-                // the filter names a fluid by its bucket, the way a storage connector's does
-                val fluid = (fluidHolder.containerConfig[face] as? NetworkFluidView)?.fluid
-                if (fluid == null || filter?.allows(fluid.bucket) != true) {
-                    fluidHolder.connectionConfig[face] = NetworkConnectionType.of(fluids.insert, false)
-                    changed = true
-                }
             }
         }
 
@@ -323,6 +351,35 @@ class StorageInterface(
     }
 
     private fun portMenu(face: BlockFace): PortMenu = portMenus.getOrPut(face) { PortMenu(face) }
+
+    /**
+     * How much this interface moves per network tick, items and fluid alike, at its current speed.
+     *
+     * One Speed Upgrade means one thing here rather than two, because a player installing it means "make
+     * this thing faster" and does not care that what is passing through happens to be a liquid.
+     */
+    private fun itemsPerTick(): Long = rate(BASE_ITEM_TRANSFER)
+
+    private fun fluidPerTick(): Long = rate(BASE_FLUID_TRANSFER)
+
+    private fun rate(base: Double): Long =
+        (base * upgradeHolder.getValue(UpgradeTypes.SPEED)).roundToLong().coerceAtLeast(0L)
+
+    /**
+     * Hands each direction its allowance for the coming tick.
+     *
+     * Set rather than accumulated: an interface nobody used for a minute has not banked a minute's worth
+     * of throughput, or the first thing to touch it would empty the system after all.
+     */
+    private fun refillBudgets() {
+        val items = itemsPerTick()
+        itemInput.refill(items)
+        itemOutput.refill(items)
+
+        val fluid = fluidPerTick()
+        fluidInput.refill(fluid)
+        fluidOutput.refill(fluid)
+    }
 
     /**
      * What a side is doing, shown both as its own menu's summary and as its entry in the block's menu,
@@ -644,19 +701,12 @@ class StorageInterface(
             return builder
         }
 
-        private fun fluidExtractIcon(): ItemBuilder {
-            val builder =
-                toggleIcon(fluidConfig().extract, DefaultGuiItems.ORANGE_BTN, "menu.smartstorage.port.fluid_extract")
-
-            val fluid = faceFluid()
-            if (fluid == null || itemHolder.extractFilters[face]?.allows(fluid.bucket) != true) {
-                builder.addLoreLines(
-                    Component.translatable("menu.smartstorage.port.needs_fluid_filter", NamedTextColor.RED)
-                        .withoutPreFormatting()
-                )
-            }
-            return builder
-        }
+        /**
+         * Unlike its item counterpart this switch always moves. The filter slots are about items and
+         * nothing else, so what governs a fluid side is the picker beside it and these two switches.
+         */
+        private fun fluidExtractIcon(): ItemBuilder =
+            toggleIcon(fluidConfig().extract, DefaultGuiItems.ORANGE_BTN, "menu.smartstorage.port.fluid_extract")
 
         /**
          * An empty bucket while the side moves no fluid at all: the picker still works — it is how you
@@ -695,17 +745,21 @@ class StorageInterface(
 
         private val statusItem = ClickableItem({ statusIcon() })
 
+        private val networkItem = ClickableItem({ networkStatusIcon(storageNetwork) })
+
         private val faceItems = CUBE_FACES.map { face ->
             ClickableItem({ faceIcon(face) }, { _, player, _ -> portMenu(face).open(player) })
         }
 
         override val gui = Gui.builder()
             .setStructure(
-                ". . . . . . . . .",
-                ". i . 1 2 3 4 5 6",
+                ". . . . . . . . u",
+                ". i n 1 2 3 4 5 6",
                 ". . . . . . . . ."
             )
+            .addIngredient('u', OpenUpgradesItem(upgradeHolder))
             .addIngredient('i', statusItem)
+            .addIngredient('n', networkItem)
             .addIngredient('1', faceItems[0])
             .addIngredient('2', faceItems[1])
             .addIngredient('3', faceItems[2])
@@ -716,6 +770,7 @@ class StorageInterface(
 
         fun update() {
             statusItem.notifyWindows()
+            networkItem.notifyWindows()
             faceItems.forEach(ClickableItem::notifyWindows)
         }
 
@@ -734,7 +789,18 @@ class StorageInterface(
                         ).withoutPreFormatting()
                     else
                         Component.translatable("menu.smartstorage.interface.detached", NamedTextColor.RED)
-                            .withoutPreFormatting()
+                            .withoutPreFormatting(),
+                    // the two figures a Speed Upgrade moves, where a player can see what one bought
+                    Component.translatable(
+                        "menu.smartstorage.interface.item_rate",
+                        NamedTextColor.GRAY,
+                        Component.text(itemsPerTick(), NamedTextColor.GREEN)
+                    ).withoutPreFormatting(),
+                    Component.translatable(
+                        "menu.smartstorage.interface.fluid_rate",
+                        NamedTextColor.GRAY,
+                        Component.text(NumberFormatUtils.getFluidString(fluidPerTick()), NamedTextColor.GREEN)
+                    ).withoutPreFormatting()
                 )
             )
             return builder

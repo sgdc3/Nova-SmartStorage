@@ -28,6 +28,8 @@
   "item.smartstorage.fluid_cell_256b": "256B Fluid Cell",
   "item.smartstorage.fluid_cell_1024b": "1024B Fluid Cell",
 
+  "menu.smartstorage.status.network": "Network: %s",
+  "menu.smartstorage.status.hint": "Whether a controller is keeping this device running",
   "menu.smartstorage.status.online": "Online",
   "menu.smartstorage.status.no_controller": "No controller",
   "menu.smartstorage.status.multiple_controllers": "More than one controller",
@@ -79,7 +81,6 @@
   "menu.smartstorage.port.fluid_kind": "This side handles: %s",
   "menu.smartstorage.port.fluid_kind.hint": "Click to switch fluid",
   "menu.smartstorage.port.needs_filter": "Set an extract filter to open this",
-  "menu.smartstorage.port.needs_fluid_filter": "The extract filter must allow this fluid's bucket",
   "menu.smartstorage.port.disabled": "Both directions off, side ignored",
   "menu.smartstorage.port.on": "on",
   "menu.smartstorage.port.off": "off",
@@ -135,5 +136,7 @@
   "menu.smartstorage.interface.title": "Storage Interface",
   "menu.smartstorage.interface.attached": "Sides serving something: %s",
   "menu.smartstorage.interface.detached": "Nothing next to it",
+  "menu.smartstorage.interface.item_rate": "Items per transfer: %s",
+  "menu.smartstorage.interface.fluid_rate": "Fluid per transfer: %s",
   "menu.smartstorage.interface.empty": "Nothing on this side"
 }

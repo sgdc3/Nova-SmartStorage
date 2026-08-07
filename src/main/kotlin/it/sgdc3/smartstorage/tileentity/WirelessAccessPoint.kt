@@ -1,6 +1,7 @@
 package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.gui.ClickableItem
+import it.sgdc3.smartstorage.gui.networkStatusIcon
 import it.sgdc3.smartstorage.network.StorageEndPoint
 import it.sgdc3.smartstorage.network.StorageHolder
 import it.sgdc3.smartstorage.network.StorageNetwork
@@ -48,24 +49,13 @@ class WirelessAccessPoint(
     }
 
     /**
-     * What the block last told anyone it was doing, so the two readouts it has — its face and its menu —
-     * are only redrawn when that changes.
-     */
-    private var renderedOnline: Boolean? = null
-
-    /**
      * The block has nothing else to do per tick; this is here because its face is a status readout and
      * a readout that lies is worse than none. The same goes for the menu, which nothing else would ever
      * refresh: it has no contents to change, so without this it froze at whatever it said when opened.
      */
     override fun handleTick() {
-        val online = storageNetwork?.isOnline == true
-        setPowered(online)
-
-        if (online != renderedOnline) {
-            renderedOnline = online
+        if (setPowered(storageNetwork?.isOnline == true))
             menuContainer.forEachMenu(WirelessAccessPointMenu::update)
-        }
     }
 
     override fun handleDisable() {
@@ -83,38 +73,36 @@ class WirelessAccessPoint(
 
         private val statusItem = ClickableItem({ statusIcon() })
 
+        /**
+         * The same lamp every other device shows, rather than this block's own bespoke one. An access
+         * point that is not on a live network is doing nothing at all, so it is the block where that
+         * question matters most — which is no reason for it to be phrased differently here.
+         */
+        private val networkItem = ClickableItem({ networkStatusIcon(storageNetwork) })
+
         override val gui = Gui.builder()
             .setStructure(
                 ". . . . . . . . .",
-                ". . . . i . . . .",
+                ". . . i n . . . .",
                 ". . . . . . . . ."
             )
             .addIngredient('i', statusItem)
+            .addIngredient('n', networkItem)
             .build()
 
-        fun update() = statusItem.notifyWindows()
+        fun update() {
+            statusItem.notifyWindows()
+            networkItem.notifyWindows()
+        }
 
-        private fun statusIcon(): ItemBuilder {
-            val online = storageNetwork?.isOnline == true
-
-            val builder = ItemBuilder(if (online) Material.ENDER_PEARL else Material.BARRIER)
-            builder.setName(
-                Component.translatable("menu.smartstorage.access_point.title").withoutPreFormatting()
-            )
-            builder.setLore(
+        private fun statusIcon(): ItemBuilder = ItemBuilder(Material.ENDER_PEARL)
+            .setName(Component.translatable("menu.smartstorage.access_point.title").withoutPreFormatting())
+            .setLore(
                 listOf(
-                    if (online)
-                        Component.translatable("menu.smartstorage.status.online", NamedTextColor.GREEN)
-                            .withoutPreFormatting()
-                    else
-                        Component.translatable("menu.smartstorage.status.disconnected", NamedTextColor.RED)
-                            .withoutPreFormatting(),
                     Component.translatable("menu.smartstorage.access_point.hint", NamedTextColor.DARK_GRAY)
                         .withoutPreFormatting()
                 )
             )
-            return builder
-        }
 
     }
 

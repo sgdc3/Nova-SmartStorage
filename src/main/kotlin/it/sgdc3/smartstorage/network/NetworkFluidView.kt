@@ -41,14 +41,20 @@ import java.util.UUID
  * drives network ticks from a synchronous task that blocks the server thread. That is a property of the
  * ticker rather than a promise, which is why it is written down rather than relied on silently.
  */
-class NetworkFluidView(
+class NetworkFluidView internal constructor(
     private val owner: StorageEndPoint,
     override val uuid: UUID,
     /**
      * The one fluid this view reports. Public because a face's extract filter is checked against this
      * fluid's bucket — see [it.sgdc3.smartstorage.tileentity.StorageInterface].
      */
-    val fluid: FluidType
+    val fluid: FluidType,
+    /**
+     * How much fluid may still come in this tick, and how much may still go out — see [TransferBudget],
+     * which is also where the reason these are two rather than one is written down.
+     */
+    private val input: TransferBudget,
+    private val output: TransferBudget
 ) : NetworkedFluidContainer {
 
     override val allowedTypes: Set<FluidType> = FluidType.entries.toSet()
@@ -62,7 +68,7 @@ class NetworkFluidView(
      * handed over.
      */
     override val amount: Long
-        get() = network?.promisableAmountOf(fluid) ?: 0L
+        get() = output.allow(network?.promisableAmountOf(fluid) ?: 0L)
 
     /**
      * This view's fluid, or null while the network holds none of it — which is what makes an empty
@@ -80,16 +86,35 @@ class NetworkFluidView(
 
     override fun addFluid(type: FluidType, amount: Long): Long {
         val network = network ?: return 0L
+
+        val allowed = input.allow(amount)
+        if (allowed <= 0L)
+            return 0L
+
         // both this and StorageNetwork.insertFluid report what was left over, so the difference is what
         // went in
-        return amount - network.insertFluid(type, amount)
+        val added = allowed - network.insertFluid(type, allowed)
+        input.spend(added)
+
+        return added
     }
 
-    override fun takeFluid(amount: Long): Long =
-        network?.extractFluid(fluid, amount) ?: 0L
+    override fun takeFluid(amount: Long): Long {
+        val allowed = output.allow(amount)
+        if (allowed <= 0L)
+            return 0L
 
+        val taken = network?.extractFluid(fluid, allowed) ?: 0L
+        output.spend(taken)
+
+        return taken
+    }
+
+    /**
+     * Full once the incoming budget is spent, because for the rest of this tick nothing more can arrive.
+     */
     override fun isFull(): Boolean =
-        network?.hasFreeFluidSpace() != true
+        input.available() <= 0L || network?.hasFreeFluidSpace() != true
 
     override fun isEmpty(): Boolean =
         amount <= 0L
@@ -100,9 +125,9 @@ class NetworkFluidView(
      * [addFluid] reports what actually went in, and the distributor believes that rather than this.
      */
     override fun accepts(type: FluidType, amount: Long): Boolean =
-        amount >= 0L && network?.hasFreeFluidSpace() == true
+        amount >= 0L && input.available() > 0L && network?.hasFreeFluidSpace() == true
 
     override fun accepts(type: FluidType): Boolean =
-        network?.hasFreeFluidSpace() == true
+        input.available() > 0L && network?.hasFreeFluidSpace() == true
 
 }

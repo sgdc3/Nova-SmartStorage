@@ -24,10 +24,16 @@ import java.util.UUID
  * So [copyContents] records the slot ordering, and [take] resolves a slot back to an item *type* and
  * extracts by type — which stays correct even if the network changed in between.
  */
-class NetworkView(
+class NetworkView internal constructor(
     private val owner: StorageEndPoint,
     override val uuid: UUID,
-    override val size: Int
+    override val size: Int,
+    /**
+     * How much may still come *in* this tick, and how much may still go out. Two, not one — see
+     * [TransferBudget] for why a shared pool would let one direction spend what the other promised.
+     */
+    private val input: TransferBudget,
+    private val output: TransferBudget
 ) : NetworkedInventory {
 
     /**
@@ -42,8 +48,18 @@ class NetworkView(
     override fun add(itemStack: ItemStack, amount: Int): Int {
         val network = network ?: return amount
         val type = ItemType.of(itemStack) ?: return amount
+
+        // what the budget will not let through is not refused, it is simply left over — which is the
+        // same answer a full network gives, and the caller already knows what to do with it
+        val allowed = input.allow(amount.toLong())
+        if (allowed <= 0L)
+            return amount
+
         // both this method and StorageNetwork.insert report the leftover
-        return network.insert(type, amount.toLong()).toInt()
+        val leftOver = network.insert(type, allowed)
+        input.spend(allowed - leftOver)
+
+        return (amount - allowed + leftOver).toInt()
     }
 
     /**
@@ -57,6 +73,12 @@ class NetworkView(
     override fun canTake(slot: Int, amount: Int): Boolean {
         val type = slotTypes.getOrNull(slot) ?: return false
         val network = network ?: return false
+
+        // the budget is part of the promise: saying yes and then handing over less because the tick ran
+        // out is the same lie as saying yes about items that are not there
+        if (amount > output.available())
+            return false
+
         return network.extractableCountOf(type) >= amount
     }
 
@@ -81,6 +103,7 @@ class NetworkView(
     override fun take(slot: Int, amount: Int) {
         val type = slotTypes.getOrNull(slot) ?: return
         val taken = network?.extract(type, amount.toLong()) ?: 0L
+        output.spend(taken)
 
         if (taken < amount) {
             SmartStorage.logger.error(
@@ -91,11 +114,16 @@ class NetworkView(
         }
     }
 
+    /**
+     * A budget that has run out reads as full, and as empty, because for the rest of this tick that is
+     * exactly what this side is: nothing more goes in and nothing more comes out. Saying so lets the
+     * distributor drop this inventory instead of asking it slot by slot.
+     */
     override fun isFull(): Boolean =
-        network?.hasFreeSpace() != true
+        input.available() <= 0L || network?.hasFreeSpace() != true
 
     override fun isEmpty(): Boolean =
-        network?.isEmpty() != false
+        output.available() <= 0L || network?.isEmpty() != false
 
     override fun copyContents(destination: Array<ItemStack>) {
         val network = network

@@ -71,14 +71,17 @@ abstract class StorageHub(
      *
      * The core is block state and the ports are display entities, so one switch has to reach two
      * different mechanisms — which is the same split the arms and the ports already live on.
+     *
+     * @return whether anything changed, so a caller can redraw the menu that says the same thing.
      */
-    protected fun setPowered(powered: Boolean) {
+    protected fun setPowered(powered: Boolean): Boolean {
         if (powered == this.powered)
-            return
+            return false
 
         this.powered = powered
         applyBlockState()
         applyPortModels()
+        return true
     }
 
     override fun handleDisable() {

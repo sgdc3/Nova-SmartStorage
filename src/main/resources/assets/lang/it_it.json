@@ -28,6 +28,8 @@
   "item.smartstorage.fluid_cell_256b": "Cella Fluidi 256B",
   "item.smartstorage.fluid_cell_1024b": "Cella Fluidi 1024B",
 
+  "menu.smartstorage.status.network": "Rete: %s",
+  "menu.smartstorage.status.hint": "Se un controller sta tenendo attivo questo dispositivo",
   "menu.smartstorage.status.online": "Attiva",
   "menu.smartstorage.status.no_controller": "Nessun controller",
   "menu.smartstorage.status.multiple_controllers": "Più di un controller",
@@ -79,7 +81,6 @@
   "menu.smartstorage.port.fluid_kind": "Questo lato gestisce: %s",
   "menu.smartstorage.port.fluid_kind.hint": "Clic per cambiare fluido",
   "menu.smartstorage.port.needs_filter": "Serve un filtro in uscita per aprirlo",
-  "menu.smartstorage.port.needs_fluid_filter": "Il filtro in uscita deve permettere il secchio di questo fluido",
   "menu.smartstorage.port.disabled": "Entrambe le direzioni spente, lato ignorato",
   "menu.smartstorage.port.on": "sì",
   "menu.smartstorage.port.off": "no",
@@ -135,5 +136,7 @@
   "menu.smartstorage.interface.title": "Interfaccia di Rete",
   "menu.smartstorage.interface.attached": "Lati che servono qualcosa: %s",
   "menu.smartstorage.interface.detached": "Niente adiacente",
+  "menu.smartstorage.interface.item_rate": "Oggetti per trasferimento: %s",
+  "menu.smartstorage.interface.fluid_rate": "Fluido per trasferimento: %s",
   "menu.smartstorage.interface.empty": "Niente su questo lato"
 }

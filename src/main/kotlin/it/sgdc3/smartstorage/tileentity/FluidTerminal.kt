@@ -1,9 +1,11 @@
 package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.gui.ClickableItem
+import it.sgdc3.smartstorage.gui.networkStatusIcon
 import it.sgdc3.smartstorage.network.StorageEndPoint
 import it.sgdc3.smartstorage.network.StorageHolder
 import it.sgdc3.smartstorage.network.StorageNetwork
+import it.sgdc3.smartstorage.network.StorageTotals
 import it.sgdc3.smartstorage.registry.GuiTextures
 import it.sgdc3.smartstorage.registry.TERMINAL_REFRESH_TICKS
 import net.kyori.adventure.text.Component
@@ -65,7 +67,9 @@ class FluidTerminal(
 
     override fun handleTick() {
         drainDeposit()
-        setPowered(storageNetwork?.isOnline == true)
+        // the lamp in the menu says what the block's face says, so one signal redraws both
+        if (setPowered(storageNetwork?.isOnline == true))
+            menuContainer.forEachMenu(FluidTerminalMenu::update)
 
         // reading an amount walks every cell and tank on the network, so it happens for an open menu or
         // not at all — the same guard the item terminals have, for the same reason
@@ -177,6 +181,7 @@ class FluidTerminal(
     inner class FluidTerminalMenu : GlobalTileEntityMenu(GuiTextures.FLUID_TERMINAL) {
 
         private val statusItem = ClickableItem({ statusIcon() })
+        private val networkItem = ClickableItem({ networkStatusIcon(storageNetwork) })
         private val fluidItems = FluidType.entries.map { fluid ->
             ClickableItem({ fluidIcon(fluid) }, { _, player, _ -> handleFluidClick(player, fluid) })
         }
@@ -185,6 +190,7 @@ class FluidTerminal(
             .setStructure(*structure())
             .apply {
                 addIngredient('i', statusItem)
+                addIngredient('n', networkItem)
                 addIngredient('b', depositInventory)
                 fluidItems.forEachIndexed { index, item -> addIngredient('1' + index, item) }
             }
@@ -192,6 +198,7 @@ class FluidTerminal(
 
         fun update() {
             statusItem.notifyWindows()
+            networkItem.notifyWindows()
             fluidItems.forEach(ClickableItem::notifyWindows)
         }
 
@@ -202,6 +209,7 @@ class FluidTerminal(
         private fun structure(): Array<String> {
             val row = CharArray(9) { '.' }
             row[1] = 'i'
+            row[2] = 'n'
             FluidType.entries.forEachIndexed { index, _ -> row[3 + index] = '1' + index }
 
             return arrayOf(
@@ -261,11 +269,12 @@ class FluidTerminal(
             return builder
         }
 
+        /**
+         * What the system holds. Deliberately no longer doubles as a connectivity readout — the lamp
+         * beside it owns that question now, and two icons answering it could disagree.
+         */
         private fun statusIcon(): ItemBuilder {
-            val totals = storageNetwork?.totals() ?: return ItemBuilder(Material.BARRIER).setName(
-                Component.translatable("menu.smartstorage.status.disconnected", NamedTextColor.RED)
-                    .withoutPreFormatting()
-            )
+            val totals = storageNetwork?.totals() ?: StorageTotals.EMPTY
 
             val builder = ItemBuilder(Material.PAPER)
             builder.setName(Component.translatable("menu.smartstorage.fluid_terminal.title").withoutPreFormatting())

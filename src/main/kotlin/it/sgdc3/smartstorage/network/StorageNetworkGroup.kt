@@ -91,8 +91,22 @@ internal class StorageNetworkGroup(
         this.providers = collectProviders()
         this.fluidProviders = collectFluidProviders()
 
-        for (network in networks)
+        for (network in networks) {
             network.group = this
+
+            // Re-publish the network to its members, which [StorageNetwork] already did for itself when
+            // it was built — but only for the ones that *were* built.
+            //
+            // Nova rebuilds a cluster whenever any network in it changes, and then reuses every network
+            // that did not: `buildDirtyCluster` takes `protoNetwork.network` untouched unless that
+            // network is dirty. So a device standing where two networks meet — which is what a hub is
+            // for, since things get placed against it — keeps pointing at whichever of them assigned it
+            // last, and if that is the one that was just destroyed, nothing ever corrects it. Its group
+            // is never ticked again, its staleness window runs out a couple of seconds later, and a
+            // device that is still perfectly well connected goes dark.
+            for (endPoint in network.endPoints)
+                endPoint.storageNetwork = network
+        }
     }
 
     /**

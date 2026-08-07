@@ -1,6 +1,7 @@
 package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.gui.ClickableItem
+import it.sgdc3.smartstorage.gui.networkStatusIcon
 import it.sgdc3.smartstorage.gui.priorityIcon
 import it.sgdc3.smartstorage.item.FluidCellBehavior
 import it.sgdc3.smartstorage.item.StorageCellBehavior
@@ -501,7 +502,9 @@ class DriveBay(
 
     override fun handleTick() {
         flushCells()
-        setPowered(storageNetwork?.isOnline == true)
+        // the menu says the same thing the face does, so it is redrawn by the same signal
+        if (setPowered(storageNetwork?.isOnline == true))
+            notifyMenus()
     }
 
     override fun handleDisable() {
@@ -532,6 +535,8 @@ class DriveBay(
 
         private val statusItem = ClickableItem({ statusIcon() })
 
+        private val networkItem = ClickableItem({ networkStatusIcon(storageNetwork) })
+
         private val priorityItem = ClickableItem({ priorityIcon(priority) })
 
         override val gui = Gui.builder()
@@ -539,11 +544,12 @@ class DriveBay(
                 ". . . . . . . . u",
                 ". c c c c c c . p",
                 ". c c c c c c . v",
-                ". i . . . . . . m"
+                ". i n . . . . . m"
             )
             .addIngredient('c', cellInventory)
             .addIngredient('u', OpenUpgradesItem(upgradeHolder))
             .addIngredient('i', statusItem)
+            .addIngredient('n', networkItem)
             .addIngredient('v', priorityItem)
             .addIngredient('p', AddNumberItem({ PRIORITY_RANGE }, { priority }, ::setPriority, "menu.smartstorage.priority_up"))
             .addIngredient('m', RemoveNumberItem({ PRIORITY_RANGE }, { priority }, ::setPriority, "menu.smartstorage.priority_down"))
@@ -551,6 +557,7 @@ class DriveBay(
 
         fun update() {
             statusItem.notifyWindows()
+            networkItem.notifyWindows()
             priorityItem.notifyWindows()
         }
 

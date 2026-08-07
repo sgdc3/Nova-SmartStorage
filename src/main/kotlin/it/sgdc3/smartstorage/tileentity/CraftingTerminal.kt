@@ -64,13 +64,14 @@ class CraftingTerminal(
             "x x x x x x c c c",
             "x x x x x x u r d",
             "x x x x x x s o f",
-            "i i i i i i i i ."
+            "i i i i i i i i n"
         ) {
             'c' by craftingInventory
             'r' by grid.resultItem()
             's' by searchButton()
             'o' by sortButton(sortMode)
             'f' by clearFilterButton(filter)
+            'n' by networkItem
             'i' by depositInventory.with(depositBackground())
         }
 

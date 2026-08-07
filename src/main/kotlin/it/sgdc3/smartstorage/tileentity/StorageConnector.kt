@@ -1,6 +1,7 @@
 package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.gui.ClickableItem
+import it.sgdc3.smartstorage.gui.networkStatusIcon
 import it.sgdc3.smartstorage.gui.priorityIcon
 import it.sgdc3.smartstorage.registry.GuiItems
 import it.sgdc3.smartstorage.registry.GuiTextures
@@ -166,7 +167,9 @@ class StorageConnector(
         // cheap enough to redo every tick, and it means a container that was broken, replaced or turned
         // into a double chest is picked up within 50 ms
         refreshContainers()
-        setPowered(storageNetwork?.isOnline == true)
+        // the lamp in the menu says what the core's own light says, so one signal redraws both
+        if (setPowered(storageNetwork?.isOnline == true))
+            menuContainer.forEachMenu(StorageConnectorMenu::update)
 
         // Each side's icon prints how full the container on it is, and that changes without the set of
         // ports changing — which is all refreshContainers notices. Gated on somebody looking and on the
@@ -919,11 +922,13 @@ class StorageConnector(
             if (allowExtract) amountOf(type) else 0L
 
         /**
-         * The filter gates fluids exactly as it gates items — by the bucket that carries the fluid, so
-         * a filter holding a water bucket makes that side a water tank.
+         * The filter does not gate fluids. It used to, by the bucket that carries them, which made a
+         * filter slot mean two unrelated things depending on what happened to be mounted on that side —
+         * and left a player who had filtered a chest wondering why their tank had stopped filling. A
+         * filter is about items; a fluid side is governed by its two direction switches.
          */
         override fun insertFluid(type: FluidType, amount: Long): Long {
-            if (!allowInsert || filter?.allows(type.bucket) == false)
+            if (!allowInsert)
                 return 0L
 
             return fluidBacking?.insertFluid(type, amount) ?: 0L
@@ -1089,6 +1094,8 @@ class StorageConnector(
 
         private val statusItem = ClickableItem({ statusIcon() })
 
+        private val networkItem = ClickableItem({ networkStatusIcon(storageNetwork) })
+
         private val faceItems = CUBE_FACES.map { face ->
             val port = ports.getValue(face)
             ClickableItem({ port.icon() }, { _, player, _ -> port.openMenu(player) })
@@ -1097,10 +1104,11 @@ class StorageConnector(
         override val gui = Gui.builder()
             .setStructure(
                 ". . . . . . . . .",
-                ". i . 1 2 3 4 5 6",
+                ". i n 1 2 3 4 5 6",
                 ". . . . . . . . ."
             )
             .addIngredient('i', statusItem)
+            .addIngredient('n', networkItem)
             .addIngredient('1', faceItems[0])
             .addIngredient('2', faceItems[1])
             .addIngredient('3', faceItems[2])
@@ -1111,6 +1119,7 @@ class StorageConnector(
 
         fun update() {
             statusItem.notifyWindows()
+            networkItem.notifyWindows()
             faceItems.forEach(ClickableItem::notifyWindows)
         }
 

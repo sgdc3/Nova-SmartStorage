@@ -1,6 +1,8 @@
 package it.sgdc3.smartstorage.tileentity
 
+import it.sgdc3.smartstorage.gui.ClickableItem
 import it.sgdc3.smartstorage.gui.TerminalContent
+import it.sgdc3.smartstorage.gui.networkStatusIcon
 import it.sgdc3.smartstorage.network.StorageEndPoint
 import it.sgdc3.smartstorage.network.StorageHolder
 import it.sgdc3.smartstorage.network.StorageNetwork
@@ -63,7 +65,9 @@ abstract class AbstractTerminal(
 
     override fun handleTick() {
         drainDeposit()
-        setPowered(storageNetwork?.isOnline == true)
+        // the lamp in the menu says what the block's face says, so one signal redraws both
+        if (setPowered(storageNetwork?.isOnline == true))
+            networkItem.notifyWindows()
 
         // Rebuilding the index means taking the global lock and walking every cell and container on the
         // network. The provider it feeds has no subscribers until someone opens this terminal, so
@@ -111,6 +115,15 @@ abstract class AbstractTerminal(
     }
 
     protected fun refreshEntries() = content.refresh()
+
+    /**
+     * The lamp that says whether a controller is keeping this terminal running — see [networkStatusIcon].
+     *
+     * One per *block* rather than one per menu, even though a terminal's menu is built per player: what
+     * it draws does not depend on who is looking, and an InvUI item notifies every window it appears in.
+     * So the tick can redraw it for everybody without going through the menus at all.
+     */
+    internal val networkItem = ClickableItem({ networkStatusIcon(storageNetwork) })
 
     //<editor-fold desc="gui building blocks, all of them the content's", defaultstate="collapsed">
 

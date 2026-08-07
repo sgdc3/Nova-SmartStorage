@@ -6,10 +6,14 @@
 base_range: 16.0
 
 # Blocks added per Range Upgrade installed in the terminal.
-range_per_upgrade: 16.0
+range_per_upgrade: 48.0
 
-# How many Range Upgrades fit. With the defaults that is 16 blocks out of the box and 80 fully upgraded.
-max_range_upgrades: 4
+# How many Range Upgrades fit.
+#
+# The three numbers are chosen in chunks, because that is the unit a player actually navigates in: one
+# chunk unaided, three more chunks per upgrade, sixteen chunks fully upgraded. That is 16 blocks out of
+# the box and 256 at the top, which is far enough to reach a base from anywhere inside it.
+max_range_upgrades: 5
 
 # How many crafts a single shift-click of the result slot performs at most, in the crafting mode. The
 # same setting the crafting terminal has, because it is the same operation.

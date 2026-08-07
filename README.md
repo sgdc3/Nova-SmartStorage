@@ -217,7 +217,8 @@ a player should have to think about.
 **All of the reach is on the terminal.** An access point has none of its own: the terminal is the thing
 that gets carried away from the network and the thing that takes Range Upgrades, so it is the thing that
 answers "can I see it from here". Putting a number on the point as well would mean two places to look
-when the answer is no. Out of the box a terminal reaches 16 blocks, and 80 with four Range Upgrades in it.
+when the answer is no. The reach is measured in chunks, because that is what a player navigates in: one
+chunk out of the box, three more per Range Upgrade, sixteen chunks — 256 blocks — with all five in.
 
 The upgrades have their own window — sneak and right-click — rather than a slot inside the terminal
 screen. A terminal that is out of range does not open, so a slot living inside it could never be reached

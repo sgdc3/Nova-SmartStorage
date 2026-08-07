@@ -341,6 +341,42 @@ To build straight into a test server:
 ./gradlew addonJar -PoutDir="C:/path/to/server/plugins"
 ```
 
+## Tests
+
+```bash
+./gradlew test
+```
+
+They run as part of `build`, so a jar that assembles is a jar whose storage maths passed.
+
+**What is covered.** The parts that decide how many of something there are: `CellData` and
+`FluidCellData` with their limits, `ItemType` as a map key, `CellSummary`, the connection-flag encoding
+that names the generated models, and `Routing` — which provider gets asked, in what order. That last one
+is where both of the duplications ever found in this addon lived, so its rules are asserted one at a
+time: high priority fills first and empties last, storage that already holds something gets it before an
+empty provider is opened, two providers over one chest are one, and storage that will not give up its
+contents promises nothing.
+
+**What is not.** Anything that needs to be a block. Tile entities, menus, block states and Nova's own
+networks are all reachable only from a running server, and faking enough of Nova to stand one up in a
+unit test would be testing the fake. Those are still verified by starting the server and playing.
+
+**The harness** is [MockBukkit](https://github.com/MockBukkit/MockBukkit), which stands in for Paper —
+an `ItemStack` with no server behind it cannot say how big a stack of it is, compare itself to another
+one, or clone itself, and all three are load-bearing here.
+
+Two things about it are worth knowing before the build file surprises you. Compilation uses Origami's
+*widened server*, which is a whole Paper implementation, and that cannot sit on a test classpath beside
+MockBukkit: both register an `InternalAPIBridge` service and Paper refuses to start when it finds two. So
+the tests get `paper-api` alone. And MockBukkit ships the game's own data tables, so it only agrees with
+the Paper it was built for — its newest build targets 26.1.2 while this addon targets 26.2, and against
+26.2 it dies looking up a registry entry that did not exist yet.
+
+The tests therefore run one minor behind production. What they exercise is this addon's arithmetic, not
+Paper's item behaviour, and the API they lean on — stack sizes, similarity, cloning — is the same in
+both; `HarnessTest` asserts that much rather than assuming it. It is the file that would fail first if
+the gap ever grew into something that matters.
+
 ## Test server
 
 A throwaway Paper server can be set up under `.server/` (gitignored):

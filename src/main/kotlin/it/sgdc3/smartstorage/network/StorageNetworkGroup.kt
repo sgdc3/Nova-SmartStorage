@@ -99,31 +99,18 @@ internal class StorageNetworkGroup(
      * Rebuilt rather than sorted in place, because an end point may gain or lose providers without the
      * topology changing at all — a chest placed beside a connector is not a network event.
      *
-     * Sorted before being deduplicated, so that when two providers turn out to be the same storage the
-     * one kept is the one whose priority the player set highest. See [StorageProvider.storageIdentity]
-     * for why sharing happens and why counting it twice mints items.
+     * The ordering and the deduplication are [Routing]'s, which is where the rules they follow are
+     * stated and tested.
      */
-    private fun collectProviders(): List<StorageProvider> {
-        val seen = HashSet<Any>()
-        return endPoints.asSequence()
-            .flatMap { it.storageProviders.asSequence() }
-            .sortedByDescending(StorageProvider::priority)
-            .filter { seen.add(it.storageIdentity) }
-            .toList()
-    }
+    private fun collectProviders(): List<StorageProvider> =
+        Routing.order(endPoints.asSequence().flatMap { it.storageProviders.asSequence() })
 
     /**
-     * The same, and deduplicated on the same key: a device that stores both shares one identity, so a
-     * connector reaching one tank from two sides is one provider in either list.
+     * The same, on the same key: a device that stores both shares one identity, so a connector reaching
+     * one tank from two sides is one provider in either list.
      */
-    private fun collectFluidProviders(): List<FluidProvider> {
-        val seen = HashSet<Any>()
-        return endPoints.asSequence()
-            .flatMap { it.fluidProviders.asSequence() }
-            .sortedByDescending(FluidProvider::priority)
-            .filter { seen.add(it.storageIdentity) }
-            .toList()
-    }
+    private fun collectFluidProviders(): List<FluidProvider> =
+        Routing.order(endPoints.asSequence().flatMap { it.fluidProviders.asSequence() })
 
     override fun tick() {
         lastTick = serverTick
@@ -212,22 +199,7 @@ internal class StorageNetworkGroup(
         if (!isOnline || amount <= 0L)
             return amount
 
-        return StorageLock.withLock {
-            var left = amount
-            val providers = this.providers
-
-            for (provider in providers) {
-                if (left <= 0L) break
-                if (provider.holds(type))
-                    left -= provider.insert(type, left)
-            }
-            for (provider in providers) {
-                if (left <= 0L) break
-                left -= provider.insert(type, left)
-            }
-
-            left
-        }
+        return StorageLock.withLock { Routing.insert(providers, type, amount) }
     }
 
     /**
@@ -239,17 +211,7 @@ internal class StorageNetworkGroup(
         if (!isOnline || amount <= 0L)
             return 0L
 
-        return StorageLock.withLock {
-            var extracted = 0L
-            val providers = this.providers
-
-            for (i in providers.indices.reversed()) {
-                if (extracted >= amount) break
-                extracted += providers[i].extract(type, amount - extracted)
-            }
-
-            extracted
-        }
+        return StorageLock.withLock { Routing.extract(providers, type, amount) }
     }
 
     /**
@@ -341,22 +303,7 @@ internal class StorageNetworkGroup(
         if (!isOnline || amount <= 0L)
             return amount
 
-        return StorageLock.withLock {
-            var left = amount
-            val providers = this.fluidProviders
-
-            for (provider in providers) {
-                if (left <= 0L) break
-                if (provider.holdsFluid(type))
-                    left -= provider.insertFluid(type, left)
-            }
-            for (provider in providers) {
-                if (left <= 0L) break
-                left -= provider.insertFluid(type, left)
-            }
-
-            left
-        }
+        return StorageLock.withLock { Routing.insertFluid(fluidProviders, type, amount) }
     }
 
     /**
@@ -366,17 +313,7 @@ internal class StorageNetworkGroup(
         if (!isOnline || amount <= 0L)
             return 0L
 
-        return StorageLock.withLock {
-            var extracted = 0L
-            val providers = this.fluidProviders
-
-            for (i in providers.indices.reversed()) {
-                if (extracted >= amount) break
-                extracted += providers[i].extractFluid(type, amount - extracted)
-            }
-
-            extracted
-        }
+        return StorageLock.withLock { Routing.extractFluid(fluidProviders, type, amount) }
     }
 
     fun amountOf(type: FluidType): Long {

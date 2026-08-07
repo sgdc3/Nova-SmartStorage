@@ -1,0 +1,13 @@
+{
+  "result": "smartstorage:wireless_terminal",
+  "shape": [
+    "iei",
+    "iti",
+    "iii"
+  ],
+  "ingredients": {
+    "i": "minecraft:iron_ingot",
+    "e": "minecraft:ender_pearl",
+    "t": "smartstorage:storage_terminal"
+  }
+}

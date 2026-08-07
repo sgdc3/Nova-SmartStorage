@@ -1,0 +1,18 @@
+# How many stacks a barrel holds without any upgrade.
+#
+# Capacity is counted in stacks rather than in items, so what a barrel holds depends on what is in it:
+# 32 stacks is 2048 cobblestone but only 32 shulker boxes. That is the same rule Sophisticated Storage
+# and Storage Drawers use, and it is the one that stays fair across item types.
+base_stacks: 32
+
+upgrade_values:
+  # Capacity multiplier per Storage Upgrade — the same item the drive bay takes.
+  #
+  # Doubling rather than adding is what makes upgrading a barrel worth doing at every step: with the
+  # default base that is 32 -> 64 -> 128 -> 256 stacks. The list length is also the upgrade limit, so
+  # this allows three.
+  storage: [ 1, 2, 4, 8 ]
+
+  # Whether the barrel burns what it has no room for. A switch, not a scale — the list has two entries,
+  # which is also what stops a second Void Upgrade from being installed.
+  void: [ 0, 1 ]

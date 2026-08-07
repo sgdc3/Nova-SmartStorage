@@ -1,0 +1,13 @@
+{
+  "result": "smartstorage:fluid_cell_256b",
+  "shape": [
+    "drd",
+    "rcr",
+    "drd"
+  ],
+  "ingredients": {
+    "d": "minecraft:diamond",
+    "r": "minecraft:redstone",
+    "c": "smartstorage:fluid_cell_64b"
+  }
+}

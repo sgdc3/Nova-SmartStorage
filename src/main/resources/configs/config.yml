@@ -1,0 +1,12 @@
+# SmartStorage — general settings.
+# Per-block settings live in the other files of this folder.
+
+network:
+  # Ticks between storage network updates: status recalculation and energy draw.
+  # Lower values make the terminal react faster to power loss, at a slightly higher cost.
+  tick_delay: 10
+
+terminal:
+  # Ticks between item list refreshes in open terminals. Terminals also refresh immediately after
+  # anything the player does, so this only covers changes made by the network itself.
+  refresh_ticks: 20

@@ -1,0 +1,13 @@
+{
+  "result": "smartstorage:fluid_cell_16b",
+  "shape": [
+    "igi",
+    "gbg",
+    "igi"
+  ],
+  "ingredients": {
+    "i": "minecraft:iron_ingot",
+    "g": "minecraft:glass",
+    "b": "minecraft:bucket"
+  }
+}

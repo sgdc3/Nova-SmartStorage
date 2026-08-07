@@ -1,0 +1,13 @@
+{
+  "result": "smartstorage:fluid_terminal",
+  "shape": [
+    "ibi",
+    "iti",
+    "iii"
+  ],
+  "ingredients": {
+    "i": "minecraft:iron_ingot",
+    "b": "minecraft:bucket",
+    "t": "smartstorage:storage_terminal"
+  }
+}

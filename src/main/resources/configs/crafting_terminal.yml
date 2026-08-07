@@ -1,0 +1,3 @@
+# How many times a single shift-click on the result may craft before stopping.
+# The grid is refilled from the network between crafts, so this caps how much one click can consume.
+max_bulk_crafts: 64

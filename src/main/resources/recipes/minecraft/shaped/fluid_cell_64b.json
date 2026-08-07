@@ -1,0 +1,13 @@
+{
+  "result": "smartstorage:fluid_cell_64b",
+  "shape": [
+    "grg",
+    "rcr",
+    "grg"
+  ],
+  "ingredients": {
+    "g": "minecraft:gold_ingot",
+    "r": "minecraft:redstone",
+    "c": "smartstorage:fluid_cell_16b"
+  }
+}

@@ -1,0 +1,46 @@
+SmartStorage
+============
+
+SmartStorage is distributed under the GNU Lesser General Public License, version 3.
+The full text is in LICENSE at the root of this project.
+
+That is not an arbitrary choice: the cable texture below is a derivative of LGPL-3.0
+material, so the licence travels with it and the project matches rather than fights it.
+
+This addon contains material from a third party, listed below. Everything not listed
+here is original work of this project, under the same LGPL-3.0.
+
+
+assets/smartstorage/textures/block/cable.png
+--------------------------------------------
+
+Derived from the cable texture of the Logistics addon in xenondevs/Nova-Addons:
+
+    logistics/src/main/resources/assets/textures/block/cable/basic.png
+    Copyright (C) 2023 xenondevs
+    GNU Lesser General Public License, version 3
+
+It is that texture with its hue rotated; saturation, brightness and alpha are taken
+from the source pixel for pixel, so it is a recolour and therefore a derivative work.
+It remains under the LGPL-3.0. The transformation is reproducible from the original
+by running tools/gen-cable-texture.ps1.
+
+A verbatim copy of the licence is included at licenses/Nova-Addons-LGPL-3.0.txt.
+
+
+What is NOT derived
+-------------------
+
+The rest of the generated art is synthesised rather than copied, and carries no
+upstream licence:
+
+  - the block casing and every device face (tools/gen-block-textures.ps1)
+  - the menu backgrounds, which are laid out to match Nova's own geometry but are
+    drawn from scratch (tools/gen-gui-textures.ps1)
+  - the cable, connector and interface models (tools/gen-cable-models.ps1,
+    tools/gen-hub-models.ps1)
+
+The cable and hub models reproduce the box coordinates and per-face UV rotations that
+Logistics uses, because a SmartStorage arm has to meet a Logistics-shaped arm without
+a seam. Those are numerical parameters rather than expression, and LGPL-3.0 section 3
+covers exactly that case.

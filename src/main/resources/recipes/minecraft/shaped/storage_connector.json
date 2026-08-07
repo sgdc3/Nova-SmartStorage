@@ -1,0 +1,13 @@
+{
+  "result": "smartstorage:storage_connector",
+  "shape": [
+    "iri",
+    "ici",
+    "iri"
+  ],
+  "ingredients": {
+    "i": "minecraft:iron_ingot",
+    "r": "minecraft:redstone",
+    "c": "minecraft:chest"
+  }
+}

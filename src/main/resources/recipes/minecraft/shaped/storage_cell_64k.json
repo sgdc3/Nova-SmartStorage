@@ -1,0 +1,13 @@
+{
+  "result": "smartstorage:storage_cell_64k",
+  "shape": [
+    "ede",
+    "dcd",
+    "ede"
+  ],
+  "ingredients": {
+    "e": "minecraft:emerald",
+    "d": "minecraft:diamond",
+    "c": "smartstorage:storage_cell_16k"
+  }
+}

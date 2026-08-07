@@ -1,0 +1,13 @@
+{
+  "result": "smartstorage:wireless_access_point",
+  "shape": [
+    "iei",
+    "idi",
+    "iii"
+  ],
+  "ingredients": {
+    "i": "minecraft:iron_ingot",
+    "e": "minecraft:ender_pearl",
+    "d": "minecraft:diamond"
+  }
+}

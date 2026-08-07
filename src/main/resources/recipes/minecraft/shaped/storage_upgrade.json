@@ -1,0 +1,13 @@
+{
+  "result": "smartstorage:storage_upgrade",
+  "shape": [
+    "gig",
+    "ici",
+    "gig"
+  ],
+  "ingredients": {
+    "g": "minecraft:gold_ingot",
+    "i": "minecraft:iron_ingot",
+    "c": "minecraft:chest"
+  }
+}

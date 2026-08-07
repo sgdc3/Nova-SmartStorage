@@ -1,0 +1,13 @@
+{
+  "result": "smartstorage:storage_cell_16k",
+  "shape": [
+    "dgd",
+    "gcg",
+    "dgd"
+  ],
+  "ingredients": {
+    "d": "minecraft:diamond",
+    "g": "minecraft:gold_ingot",
+    "c": "smartstorage:storage_cell_4k"
+  }
+}

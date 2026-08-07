@@ -1,0 +1,3 @@
+# Total fluid this cell can hold, across both fluid types, in Nova's fluid units — 1000 to the bucket.
+# 16 buckets.
+max_amount: 16000

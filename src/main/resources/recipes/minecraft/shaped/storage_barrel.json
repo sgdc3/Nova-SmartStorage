@@ -1,0 +1,12 @@
+{
+  "result": "smartstorage:storage_barrel",
+  "shape": [
+    "ccc",
+    "cbc",
+    "ccc"
+  ],
+  "ingredients": {
+    "c": "minecraft:copper_ingot",
+    "b": "minecraft:barrel"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "result": "smartstorage:fluid_cell_1024b",
+  "shape": [
+    "nrn",
+    "rcr",
+    "nrn"
+  ],
+  "ingredients": {
+    "n": "minecraft:netherite_scrap",
+    "r": "minecraft:redstone",
+    "c": "smartstorage:fluid_cell_256b"
+  }
+}

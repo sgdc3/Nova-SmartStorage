@@ -1,0 +1,13 @@
+{
+  "result": "smartstorage:barrel_controller",
+  "shape": [
+    "iri",
+    "rbr",
+    "iri"
+  ],
+  "ingredients": {
+    "i": "minecraft:iron_ingot",
+    "r": "minecraft:redstone",
+    "b": "smartstorage:storage_barrel"
+  }
+}

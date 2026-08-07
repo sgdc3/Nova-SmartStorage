@@ -1,0 +1,13 @@
+{
+  "result": "smartstorage:void_upgrade",
+  "shape": [
+    "oio",
+    "olo",
+    "oio"
+  ],
+  "ingredients": {
+    "o": "minecraft:obsidian",
+    "i": "minecraft:iron_ingot",
+    "l": "minecraft:lava_bucket"
+  }
+}

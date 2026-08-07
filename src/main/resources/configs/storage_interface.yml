@@ -1,0 +1,9 @@
+# How many distinct item types the interface exposes to Nova's item network at once.
+# The network's most numerous types come first, so a smaller number mostly limits what hoppers and
+# cables can pull out, not what they can push in.
+#
+# Nova reads this once when a network is built: changing it takes effect after a server restart.
+exposed_slots: 27
+# How often the interface re-reads its six neighbours to keep the menu icons honest, in ticks. Nothing
+# routes on this; it only decides how quickly "nothing there" becomes "there, but switched off".
+neighbour_rescan_ticks: 20

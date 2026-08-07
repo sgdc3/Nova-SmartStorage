@@ -1,0 +1,14 @@
+{
+  "result": "smartstorage:storage_cable",
+  "amount": 8,
+  "shape": [
+    "iii",
+    "rgr",
+    "iii"
+  ],
+  "ingredients": {
+    "i": "minecraft:iron_ingot",
+    "r": "minecraft:redstone",
+    "g": "minecraft:glass"
+  }
+}

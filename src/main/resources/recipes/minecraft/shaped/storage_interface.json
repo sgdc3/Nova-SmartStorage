@@ -1,0 +1,12 @@
+{
+  "result": "smartstorage:storage_interface",
+  "shape": [
+    "iii",
+    "ihi",
+    "iii"
+  ],
+  "ingredients": {
+    "i": "minecraft:iron_ingot",
+    "h": "minecraft:hopper"
+  }
+}

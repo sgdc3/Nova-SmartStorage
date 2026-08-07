@@ -1,0 +1,7 @@
+{
+  "result": "smartstorage:crafting_terminal",
+  "ingredients": {
+    "smartstorage:storage_terminal": 1,
+    "minecraft:crafting_table": 1
+  }
+}

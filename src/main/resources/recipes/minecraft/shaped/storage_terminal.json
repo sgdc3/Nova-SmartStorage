@@ -1,0 +1,13 @@
+{
+  "result": "smartstorage:storage_terminal",
+  "shape": [
+    "iii",
+    "gcg",
+    "iii"
+  ],
+  "ingredients": {
+    "i": "minecraft:iron_ingot",
+    "g": "minecraft:glass",
+    "c": "minecraft:comparator"
+  }
+}

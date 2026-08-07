@@ -1,0 +1,22 @@
+# Gradle
+.gradle/
+build/
+.kotlin/
+
+# Locally built dependencies (see tools/setup-deps.ps1)
+.deps/
+
+# Local test server (see tools/run-server.ps1)
+.server/
+
+# IDE
+.idea/
+.idea_modules/
+*.iml
+.settings/
+out/
+
+# Temp files
+*.tmp
+*.swp
+*.log

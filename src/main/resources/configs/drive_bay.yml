@@ -1,0 +1,7 @@
+# Disk slots available without any upgrade.
+base_slots: 6
+
+upgrade_values:
+  # Extra disk slots per Storage Upgrade. The list length is also the upgrade limit, so this allows
+  # three upgrades: 6 -> 8 -> 10 -> 12. Twelve is a hard cap in code; longer lists are clamped to it.
+  storage: [ 0, 2, 4, 6 ]

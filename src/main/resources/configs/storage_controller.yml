@@ -1,0 +1,19 @@
+# Energy buffer of the controller.
+max_energy: 200000
+
+# Energy drawn per server tick, per device on the network (cables do not count as devices).
+# Set both values to 0 to make storage networks run for free.
+energy_per_device: 4
+# Energy drawn per server tick, per installed storage cell.
+energy_per_cell: 8
+
+# Maximum number of devices a single network may contain. Cables are not counted.
+# Keeps a pathological network from dragging down the network tick.
+# Set to -1 for no limit, the same convention Nova uses for its own max_complexity settings.
+max_devices: 64
+
+upgrade_values:
+  # Energy buffer multiplier per Energy Upgrade.
+  energy: [ 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6 ]
+  # Energy cost divisor per Efficiency Upgrade.
+  efficiency: [ 1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6, 2.8, 3 ]

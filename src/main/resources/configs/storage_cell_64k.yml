@@ -1,0 +1,4 @@
+# Distinct item types this cell can hold.
+max_types: 64
+# Total number of items this cell can hold, across all types.
+max_items: 524288

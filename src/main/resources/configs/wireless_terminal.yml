@@ -1,0 +1,16 @@
+# How far the terminal can see an access point, in blocks, with no upgrades in it.
+#
+# All of the reach lives on the terminal rather than being split with the access point: the terminal is
+# the thing that gets carried away from the network and the thing that takes upgrades, so it is the
+# thing that answers "can I see it from here". A point is only a place to be seen from.
+base_range: 16.0
+
+# Blocks added per Range Upgrade installed in the terminal.
+range_per_upgrade: 16.0
+
+# How many Range Upgrades fit. With the defaults that is 16 blocks out of the box and 80 fully upgraded.
+max_range_upgrades: 4
+
+# How many crafts a single shift-click of the result slot performs at most, in the crafting mode. The
+# same setting the crafting terminal has, because it is the same operation.
+max_bulk_crafts: 64

@@ -203,6 +203,36 @@ class StorageInterface(
         holders += storageHolder
     }
 
+    /**
+     * Tells Nova which faces are still worth connecting, for every face this block has closed.
+     *
+     * A closed face is not merely idle to Nova: `FluidNetworkChannel` and `ItemDistributorBuilder` both
+     * **throw** on a face they hold a connection to whose connection type is `NONE`, and that exception
+     * aborts the whole build — every dirty network of every type, in every chunk being processed. One
+     * side switched off on one interface takes down the storage network with it, and the first thing a
+     * player sees is that their controller has gone dark for no reason they can find.
+     *
+     * Called for every closed face rather than only the ones just changed, because a world may already
+     * hold the inconsistency: an earlier version of [enforceExtractFilters] closed fluid sides without
+     * telling anyone, and what it left behind is persisted in Nova's own network state, not in ours.
+     * There is no repairing that from inside the build — it never gets far enough to notify us — so this
+     * also runs from [handleEnable], which does not depend on a network existing.
+     */
+    private suspend fun syncAllowedFaces(state: NetworkState) {
+        for (face in CUBE_FACES) {
+            if (itemHolder.connectionConfig[face] == NetworkConnectionType.NONE)
+                state.handleEndPointAllowedFacesChange(this, ITEM, face)
+
+            if (fluidHolder.connectionConfig[face] == NetworkConnectionType.NONE)
+                state.handleEndPointAllowedFacesChange(this, FLUID, face)
+        }
+    }
+
+    override fun handleEnable() {
+        super.handleEnable()
+        NetworkManager.queueWrite(pos.chunkPos, ::syncAllowedFaces)
+    }
+
     override suspend fun handleNetworkLoaded(state: NetworkState) = applyConnections(state)
 
     override suspend fun handleNetworkUpdate(state: NetworkState) = applyConnections(state)
@@ -251,7 +281,12 @@ class StorageInterface(
      * earned.
      */
     private suspend fun applyConnections(state: NetworkState) {
-        enforceExtractFilters()
+        // The return value is not decoration. Closing a side that had nothing but extraction open leaves
+        // it at NONE, and a face at NONE is a face Nova must stop counting as connected — its own
+        // network builder throws outright on one it still holds a connection to. Telling it is the whole
+        // point of the flag, and for a long time nothing here read it.
+        if (enforceExtractFilters())
+            syncAllowedFaces(state)
 
         val connected = state.getConnectedNodes(this)
         val arms = connected.row(NetworkTypes.STORAGE).keys.toEnumSet()

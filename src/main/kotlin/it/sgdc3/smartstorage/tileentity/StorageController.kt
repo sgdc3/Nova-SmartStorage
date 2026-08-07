@@ -73,7 +73,7 @@ class StorageController(
     private val energyPerCell by energyDraw(ENERGY_PER_CELL)
 
     @Volatile
-    var status: StorageNetworkStatus = StorageNetworkStatus.offline(OfflineReason.NO_CONTROLLER)
+    override var status: StorageNetworkStatus = StorageNetworkStatus.offline(OfflineReason.NO_CONTROLLER)
         private set
 
     private var renderedStatus: StorageNetworkStatus? = null

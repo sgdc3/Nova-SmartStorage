@@ -46,6 +46,14 @@ object Items {
         modelDefinition { model = buildModel { getModel("item/connector") } }
     }
 
+    val FLUID_INTERFACE: NovaItem = item(Blocks.FLUID_INTERFACE) {
+        modelDefinition { model = buildModel { getModel("item/fluid_interface") } }
+    }
+
+    val FLUID_CONNECTOR: NovaItem = item(Blocks.FLUID_CONNECTOR) {
+        modelDefinition { model = buildModel { getModel("item/fluid_connector") } }
+    }
+
     /**
      * Adds disk slots to a drive bay. Registered as a Simple-Upgrades upgrade type in [UpgradeTypes].
      */

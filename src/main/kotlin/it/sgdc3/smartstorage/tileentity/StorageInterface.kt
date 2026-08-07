@@ -4,8 +4,6 @@ import it.sgdc3.smartstorage.gui.ClickableItem
 import it.sgdc3.smartstorage.gui.networkStatusIcon
 import it.sgdc3.smartstorage.gui.priorityIcon
 import it.sgdc3.smartstorage.network.DEFAULT_PRIORITY
-import it.sgdc3.smartstorage.network.FluidGateway
-import it.sgdc3.smartstorage.network.NetworkFluidView
 import it.sgdc3.smartstorage.network.NetworkView
 import it.sgdc3.smartstorage.network.PRIORITY_RANGE
 import it.sgdc3.smartstorage.network.StorageEndPoint
@@ -49,27 +47,20 @@ import xyz.xenondevs.nova.world.BlockPos
 import xyz.xenondevs.nova.world.block.state.NovaBlockState
 import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
 import xyz.xenondevs.nova.world.block.tileentity.network.NetworkManager
-import xyz.xenondevs.nova.world.block.tileentity.network.node.ContainerEndPointDataHolder
 import xyz.xenondevs.nova.world.block.tileentity.network.node.NetworkEndPoint
-import xyz.xenondevs.nova.world.block.tileentity.network.type.DefaultNetworkTypes.FLUID
 import xyz.xenondevs.nova.world.block.tileentity.network.type.DefaultNetworkTypes.ITEM
 import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkConnectionType
-import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkType
-import xyz.xenondevs.nova.world.block.tileentity.network.type.fluid.FluidType
-import xyz.xenondevs.nova.world.block.tileentity.network.type.fluid.holder.FluidHolder
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.ItemFilter
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.holder.ItemHolder
 import xyz.xenondevs.nova.world.format.NetworkState
 import xyz.xenondevs.nova.world.item.DefaultGuiItems
 import xyz.xenondevs.nova.world.item.NovaItem
-import xyz.xenondevs.nova.util.NumberFormatUtils
 import java.util.UUID
 import kotlin.math.max
 import kotlin.math.roundToLong
 
 private val EXPOSED_SLOTS by STORAGE_INTERFACE.config.entry<Int>("exposed_slots")
 private val BASE_ITEM_TRANSFER by STORAGE_INTERFACE.config.entry<Double>("base_item_transfer")
-private val BASE_FLUID_TRANSFER by STORAGE_INTERFACE.config.entry<Double>("base_fluid_transfer")
 
 /**
  * How often the neighbours are re-read for the menu icons. Nothing routes on this, so a second is well
@@ -79,17 +70,22 @@ private val BASE_FLUID_TRANSFER by STORAGE_INTERFACE.config.entry<Double>("base_
 private val NEIGHBOUR_RESCAN_TICKS by STORAGE_INTERFACE.config.entry<Int>("neighbour_rescan_ticks")
 
 /**
- * Bridges a storage network into Nova's item and fluid networks.
+ * Bridges a storage network's *items* into Nova's item network.
  *
- * Sitting on all three at once, it exposes everything the storage network holds as a plain inventory and
- * a pair of tanks. Place one against a chest and items flow both ways; run Logistics cables into it and
- * you get routing for free. This is why the addon needs no import or export buses of its own.
+ * Sitting on both at once, it exposes everything the storage network holds as a plain inventory. Place
+ * one against a chest and items flow both ways; run Logistics cables into it and you get routing for
+ * free. This is why the addon needs no import or export buses of its own.
+ *
+ * Fluids are [FluidInterface]'s job. They used to be this block's as well, and splitting them is worth
+ * the extra recipe: every side had to ask two unrelated questions — what may pass as an item, which of
+ * the two fluids this is — and answer both in one menu, when in practice a side is doing one or the
+ * other. What is left here is about items, and so is every control on it.
  *
  * ## Everything is per face
  *
- * A side has its own directions, its own filters and its own fluid — nothing here is set for the block
- * as a whole. An interface wedged between a furnace and a pipe is doing two unrelated jobs, and a single
- * pair of filters could only describe one of them.
+ * A side has its own directions and its own filters — nothing here is set for the block as a whole. An
+ * interface wedged between a furnace and a pipe is doing two unrelated jobs, and a single pair of
+ * filters could only describe one of them.
  *
  * The item filters are Nova's own [ItemHolder.insertFilters][xyz.xenondevs.nova.world.block.tileentity.network.type.item.holder.ItemHolder.insertFilters]
  * and `extractFilters`, so Nova applies them per face in its own distributor, persists them and drops
@@ -109,25 +105,17 @@ private val NEIGHBOUR_RESCAN_TICKS by STORAGE_INTERFACE.config.entry<Int>("neigh
  * config to it: turning extraction on for a side with no filter turns straight back off, and pulling the
  * filter out of a side that was extracting closes it.
  *
- * **This is about items only.** Fluids used to be governed by the same slot, named by the bucket that
- * carries them, and it was the wrong shape for them: a filter is a list of the many things that may
- * pass, while a fluid side already deals in exactly one of the two fluids there are — the picker on the
- * side says which. Requiring a bucket in the filter as well made one slot mean two unrelated things
- * depending on what was mounted, and gave a player who had filtered a chest a tank that quietly stopped
- * filling. A fluid side is governed by its own two switches and its picker; extraction still starts
- * closed, so nothing leaves before somebody opens it.
- *
  * ## What it looks like
  *
- * An arm towards each device on the *storage* network and a port against each endpoint on the item or
- * fluid network — the chest, machine or tank it feeds. It has no facing of its own, so a single
- * interface wedged between two machines serves both.
+ * An arm towards each device on the *storage* network and a port against each endpoint on the item
+ * network — the chest or machine it feeds. It has no facing of its own, so a single interface wedged
+ * between two machines serves both.
  */
 class StorageInterface(
     pos: BlockPos,
     state: NovaBlockState,
     data: Compound
-) : StorageHub(pos, state, data), StorageEndPoint, FluidGateway {
+) : StorageHub(pos, state, data), StorageEndPoint {
 
     override val portModel = Models.INTERFACE_ATTACHMENT
     override val portModelOff = Models.INTERFACE_ATTACHMENT_OFF
@@ -140,47 +128,18 @@ class StorageInterface(
     private val upgradeHolder = storedUpgradeHolder(UpgradeTypes.SPEED)
 
     /**
-     * What this interface will move in one network tick, per resource and per direction.
+     * What this interface will move in one network tick, per direction.
      *
      * A storage interface is the seam between a virtual system that holds everything and a world that
      * moves things one at a time, and without a rate of its own it was not a seam at all: Nova takes a
-     * network's throughput from its *cables*, and an interface bolted straight onto a tank has none — so
-     * the whole system emptied into that tank in a single tick. It is now slow out of the box and as
-     * fast as a player has paid for. See [TransferBudget].
+     * network's throughput from its *cables*, and an interface bolted straight onto a chest has none. It
+     * is now slow out of the box and as fast as a player has paid for. See [TransferBudget].
      */
-    private val itemInput = TransferBudget()
-    private val itemOutput = TransferBudget()
-    private val fluidInput = TransferBudget()
-    private val fluidOutput = TransferBudget()
+    private val input = TransferBudget()
+    private val output = TransferBudget()
 
-    private val networkView = NetworkView(this, uuid, EXPOSED_SLOTS, itemInput, itemOutput)
+    private val networkView = NetworkView(this, uuid, EXPOSED_SLOTS, input, output)
     private val itemHolder = storedItemHolder(networkView to NetworkConnectionType.BUFFER)
-
-    /**
-     * One tank per fluid Nova has — see [NetworkFluidView] for why it cannot be one tank for both.
-     *
-     * The UUIDs are derived from this block's own so that they stay put across restarts: Nova stores a
-     * face's chosen container by UUID, and a random one per load would scramble every side config.
-     */
-    private val fluidViews: List<NetworkFluidView> = FluidType.entries.map { fluid ->
-        NetworkFluidView(
-            this,
-            UUID.nameUUIDFromBytes("$uuid:${fluid.name}".toByteArray()),
-            fluid,
-            fluidInput,
-            fluidOutput
-        )
-    }
-
-    /**
-     * Inputs open, outputs closed, the same as the item side — and the same rule keeps them closed until
-     * a filter names what may come out.
-     */
-    private val fluidHolder = storedFluidHolder(
-        fluidViews.first() to NetworkConnectionType.BUFFER,
-        *fluidViews.drop(1).map { it to NetworkConnectionType.BUFFER }.toTypedArray(),
-        defaultConnectionConfig = { CUBE_FACES.associateWithTo(enumMap()) { NetworkConnectionType.INSERT } }
-    )
 
     /**
      * One per side, kept rather than rebuilt per click so an open window keeps working after somebody
@@ -222,9 +181,6 @@ class StorageInterface(
         for (face in CUBE_FACES) {
             if (itemHolder.connectionConfig[face] == NetworkConnectionType.NONE)
                 state.handleEndPointAllowedFacesChange(this, ITEM, face)
-
-            if (fluidHolder.connectionConfig[face] == NetworkConnectionType.NONE)
-                state.handleEndPointAllowedFacesChange(this, FLUID, face)
         }
     }
 
@@ -271,11 +227,11 @@ class StorageInterface(
     }
 
     /**
-     * Arms follow the storage network, ports follow the item *and* fluid networks — and only where the
+     * Arms follow the storage network, ports follow the item network — and only where the
      * neighbour is an endpoint, because a cable already draws its own attachment against us and two
      * plates pressed face to face would be one too many.
      *
-     * A side whose connection config allows neither direction on either network gets no port. There is
+     * A side whose connection config allows neither direction gets no port. There is
      * nothing flowing through it, so drawing a nozzle against that chest would be a lie — and dropping
      * it also frees the block state, which is what decides whether the chain behind the model is still
      * earned.
@@ -293,7 +249,6 @@ class StorageInterface(
 
         val ports = HashSet<BlockFace>()
         collectPorts(connected.row(ITEM), itemHolder.connectionConfig, ports)
-        collectPorts(connected.row(FLUID), fluidHolder.connectionConfig, ports)
 
         attachedFaces = neighbours(state)
         servedFaces = ports
@@ -314,8 +269,8 @@ class StorageInterface(
     }
 
     /**
-     * The sides with something against them this interface *could* serve — an end point that holds items
-     * or fluids, whether or not this side is currently willing to talk to it.
+     * The sides with something against them this interface *could* serve — an end point that holds items,
+     * whether or not this side is currently willing to talk to it.
      *
      * Read from the node map rather than from the connected ones, and that distinction is the whole
      * point: a connection only exists where the config allows one, so asking which nodes are *connected*
@@ -326,7 +281,7 @@ class StorageInterface(
     private fun neighbours(state: NetworkState): Set<BlockFace> =
         state.getNearbyNodes(pos, CUBE_FACES)
             .filterValues { node ->
-                node is NetworkEndPoint && node.holders.any { it is ItemHolder || it is FluidHolder }
+                node is NetworkEndPoint && node.holders.any { it is ItemHolder }
             }
             .keys
             .toEnumSet()
@@ -388,14 +343,9 @@ class StorageInterface(
     private fun portMenu(face: BlockFace): PortMenu = portMenus.getOrPut(face) { PortMenu(face) }
 
     /**
-     * How much this interface moves per network tick, items and fluid alike, at its current speed.
-     *
-     * One Speed Upgrade means one thing here rather than two, because a player installing it means "make
-     * this thing faster" and does not care that what is passing through happens to be a liquid.
+     * How much this interface moves per network tick at its current speed.
      */
     private fun itemsPerTick(): Long = rate(BASE_ITEM_TRANSFER)
-
-    private fun fluidPerTick(): Long = rate(BASE_FLUID_TRANSFER)
 
     private fun rate(base: Double): Long =
         (base * upgradeHolder.getValue(UpgradeTypes.SPEED)).roundToLong().coerceAtLeast(0L)
@@ -408,12 +358,8 @@ class StorageInterface(
      */
     private fun refillBudgets() {
         val items = itemsPerTick()
-        itemInput.refill(items)
-        itemOutput.refill(items)
-
-        val fluid = fluidPerTick()
-        fluidInput.refill(fluid)
-        fluidOutput.refill(fluid)
+        input.refill(items)
+        output.refill(items)
     }
 
     /**
@@ -422,8 +368,7 @@ class StorageInterface(
      */
     private fun faceIcon(face: BlockFace): ItemBuilder {
         val items = itemHolder.connectionConfig[face] ?: NetworkConnectionType.NONE
-        val fluids = fluidHolder.connectionConfig[face] ?: NetworkConnectionType.NONE
-        val open = items != NetworkConnectionType.NONE || fluids != NetworkConnectionType.NONE
+        val open = items != NetworkConnectionType.NONE
         val attached = face in attachedFaces
 
         // the same three states a storage connector's side has, and the same three icons: something
@@ -450,18 +395,6 @@ class StorageInterface(
             else -> directions("menu.smartstorage.port.directions", items)
         }
 
-        if (attached && open)
-            lore += directions("menu.smartstorage.port.fluid_directions", fluids)
-
-        val fluid = (fluidHolder.containerConfig[face] as? NetworkFluidView)?.fluid
-        if (fluid != null && fluids != NetworkConnectionType.NONE) {
-            lore += Component.translatable(
-                "menu.smartstorage.port.fluid_kind",
-                NamedTextColor.GRAY,
-                Component.translatable(fluid.localizedName, NamedTextColor.GREEN)
-            ).withoutPreFormatting()
-        }
-
         lore += Component.translatable(
             "menu.smartstorage.priority",
             NamedTextColor.GRAY,
@@ -475,9 +408,9 @@ class StorageInterface(
     /**
      * What a side is worth to Nova's own routing.
      *
-     * Nova keeps four numbers per face — insert and extract, items and fluids — and this addon shows
-     * one, because four switches that nobody sets independently is a menu rather than a control. Reading
-     * the item insert map is arbitrary only in the sense that all four are held equal by [setPriority].
+     * Nova keeps two numbers per face, insert and extract, and this addon shows one: two switches that
+     * nobody sets independently are a menu rather than a control. Reading the insert map is arbitrary
+     * only in the sense that [setPriority] holds both equal.
      */
     private fun priorityOf(face: BlockFace): Int =
         itemHolder.insertPriorities[face] ?: DEFAULT_PRIORITY
@@ -505,8 +438,7 @@ class StorageInterface(
     ).withoutPreFormatting()
 
     /**
-     * Everything one side of the interface does: two directions per network, the filters that gate them,
-     * and which of Nova's fluids this side deals in.
+     * Everything one side of the interface does: two directions and the filters that gate them.
      */
     private inner class PortMenu(private val face: BlockFace) {
 
@@ -514,23 +446,12 @@ class StorageInterface(
 
         private val insertItem = ClickableItem(
             { toggleIcon(itemConfig().insert, DefaultGuiItems.BLUE_BTN, "menu.smartstorage.port.insert") },
-            { _, _, _ -> toggle(itemHolder, ITEM, insert = true) }
+            { _, _, _ -> toggle(insert = true) }
         )
         private val extractItem = ClickableItem(
             { extractIcon() },
-            { _, _, _ -> toggle(itemHolder, ITEM, insert = false) }
+            { _, _, _ -> toggle(insert = false) }
         )
-
-        private val fluidInsertItem = ClickableItem(
-            { toggleIcon(fluidConfig().insert, DefaultGuiItems.BLUE_BTN, "menu.smartstorage.port.fluid_insert") },
-            { _, _, _ -> toggle(fluidHolder, FLUID, insert = true) }
-        )
-        private val fluidExtractItem = ClickableItem(
-            { fluidExtractIcon() },
-            { _, _, _ -> toggle(fluidHolder, FLUID, insert = false) }
-        )
-
-        private val fluidKindItem = ClickableItem({ fluidKindIcon() }, { _, _, _ -> cycleFluid() })
 
         private val priorityItem = ClickableItem({ priorityIcon(priorityOf(face)) })
 
@@ -542,23 +463,20 @@ class StorageInterface(
         private val extractFilterInventory = filterInventory(extract = true)
 
         /**
-         * Items on the top row with their filters under them, fluids on the bottom. The side's summary
-         * sits at the top, clear of the fluid it names.
+         * The two directions on the top row with their filters under them, and the side's summary clear
+         * of both.
          */
         private val gui = Gui.builder()
             .setStructure(
                 ". . n x . i . . .",
                 ". . a b . . m v p",
-                ". . f g . k . . ."
+                ". . . . . . . . ."
             )
             .addIngredient('n', insertItem)
             .addIngredient('x', extractItem)
             .addIngredient('a', insertFilterInventory, GuiItems.INSERT_FILTER_PLACEHOLDER)
             .addIngredient('b', extractFilterInventory, GuiItems.EXTRACT_FILTER_PLACEHOLDER)
-            .addIngredient('f', fluidInsertItem)
-            .addIngredient('g', fluidExtractItem)
             .addIngredient('i', statusItem)
-            .addIngredient('k', fluidKindItem)
             .addIngredient('v', priorityItem)
             .addIngredient('m', RemoveNumberItem({ PRIORITY_RANGE }, { priorityOf(face) }, ::setPriority, "menu.smartstorage.priority_down"))
             .addIngredient('p', AddNumberItem({ PRIORITY_RANGE }, { priorityOf(face) }, ::setPriority, "menu.smartstorage.priority_up"))
@@ -578,26 +496,20 @@ class StorageInterface(
             statusItem.notifyWindows()
             insertItem.notifyWindows()
             extractItem.notifyWindows()
-            fluidInsertItem.notifyWindows()
-            fluidExtractItem.notifyWindows()
-            fluidKindItem.notifyWindows()
             priorityItem.notifyWindows()
         }
 
         /**
-         * Sets all four of Nova's per-face priorities together — insert and extract, items and fluids.
-         * They are one number in the menu, so they have to be one number underneath, or a player who
-         * only ever sees the item insert value could be ordered by an extract value they never touched.
+         * Sets both of Nova's per-face priorities together — insert and extract. They are one number in
+         * the menu, so they have to be one number underneath, or a player who only ever sees the insert
+         * value could be ordered by an extract value they never touched.
          */
         private fun setPriority(value: Int) {
             NetworkManager.queueWrite(pos.chunkPos) { state ->
                 itemHolder.insertPriorities[face] = value
                 itemHolder.extractPriorities[face] = value
-                fluidHolder.insertPriorities[face] = value
-                fluidHolder.extractPriorities[face] = value
 
                 state.getNetwork(this@StorageInterface, ITEM, face)?.markDirty()
-                state.getNetwork(this@StorageInterface, FLUID, face)?.markDirty()
 
                 runTask {
                     update()
@@ -609,56 +521,32 @@ class StorageInterface(
         private fun itemConfig(): NetworkConnectionType =
             itemHolder.connectionConfig[face] ?: NetworkConnectionType.NONE
 
-        private fun fluidConfig(): NetworkConnectionType =
-            fluidHolder.connectionConfig[face] ?: NetworkConnectionType.NONE
-
-        private fun faceFluid(): FluidType? =
-            (fluidHolder.containerConfig[face] as? NetworkFluidView)?.fluid
-
         //<editor-fold desc="writes", defaultstate="collapsed">
 
         /**
-         * Flips one direction of one network for this face.
+         * Flips one direction for this face.
          *
          * The write has to go through [NetworkManager], on its thread, and be followed by the two calls
          * that tell Nova the topology may have moved — that is the same protocol its own side config
          * menu uses, and skipping either half leaves the network still routing through a side the player
          * has just closed.
          *
-         * Everything off on both networks means no port at all, so the model, the hitboxes and the block
-         * state behind them have to follow: [applyConnections] is what knows how to do all three, and it
-         * is called here rather than left to a network update because closing a side does not always
-         * produce one. It also re-runs [enforceExtractFilters], which is why asking for extraction
-         * without a filter simply does not take.
+         * Everything off means no port at all, so the model, the hitboxes and the block state behind them
+         * have to follow: [applyConnections] is what knows how to do all three, and it is called here
+         * rather than left to a network update because closing a side does not always produce one. It
+         * also re-runs [enforceExtractFilters], which is why asking for extraction without a filter
+         * simply does not take.
          */
-        private fun toggle(holder: ContainerEndPointDataHolder<*>, networkType: NetworkType<*>, insert: Boolean) {
+        private fun toggle(insert: Boolean) {
             NetworkManager.queueWrite(pos.chunkPos) { state ->
-                val current = holder.connectionConfig[face] ?: NetworkConnectionType.NONE
-                holder.connectionConfig[face] = if (insert)
+                val current = itemConfig()
+                itemHolder.connectionConfig[face] = if (insert)
                     NetworkConnectionType.of(!current.insert, current.extract)
                 else
                     NetworkConnectionType.of(current.insert, !current.extract)
 
-                state.getNetwork(this@StorageInterface, networkType, face)?.markDirty()
-                state.handleEndPointAllowedFacesChange(this@StorageInterface, networkType, face)
-
-                applyConnections(state)
-                runTask(::update)
-            }
-        }
-
-        /**
-         * Steps this face on to the next fluid. With two of them that is a switch; written as a cycle
-         * because Nova's fluid list is what decides how many there are.
-         */
-        private fun cycleFluid() {
-            NetworkManager.queueWrite(pos.chunkPos) { state ->
-                val current = fluidHolder.containerConfig[face]
-                val index = fluidViews.indexOfFirst { it === current }
-                fluidHolder.containerConfig[face] = fluidViews[(index + 1).mod(fluidViews.size)]
-
-                state.getNetwork(this@StorageInterface, FLUID, face)?.markDirty()
-                state.handleEndPointAllowedFacesChange(this@StorageInterface, FLUID, face)
+                state.getNetwork(this@StorageInterface, ITEM, face)?.markDirty()
+                state.handleEndPointAllowedFacesChange(this@StorageInterface, ITEM, face)
 
                 applyConnections(state)
                 runTask(::update)
@@ -697,8 +585,6 @@ class StorageInterface(
 
                 state.getNetwork(this@StorageInterface, ITEM, face)?.markDirty()
                 state.handleEndPointAllowedFacesChange(this@StorageInterface, ITEM, face)
-                state.getNetwork(this@StorageInterface, FLUID, face)?.markDirty()
-                state.handleEndPointAllowedFacesChange(this@StorageInterface, FLUID, face)
 
                 applyConnections(state)
                 runTask(::update)
@@ -736,37 +622,6 @@ class StorageInterface(
             return builder
         }
 
-        /**
-         * Unlike its item counterpart this switch always moves. The filter slots are about items and
-         * nothing else, so what governs a fluid side is the picker beside it and these two switches.
-         */
-        private fun fluidExtractIcon(): ItemBuilder =
-            toggleIcon(fluidConfig().extract, DefaultGuiItems.ORANGE_BTN, "menu.smartstorage.port.fluid_extract")
-
-        /**
-         * An empty bucket while the side moves no fluid at all: the picker still works — it is how you
-         * choose before opening a direction — but showing a full one would claim something is flowing.
-         */
-        private fun fluidKindIcon(): ItemBuilder {
-            val fluid = faceFluid()
-            // the name still says which fluid the side is set to; only the bucket empties, because a full
-            // one would claim something is flowing through a side that moves nothing
-            val flowing = fluid != null && fluidConfig() != NetworkConnectionType.NONE
-
-            return (if (flowing) ItemBuilder(fluid.bucket) else ItemBuilder(Material.BUCKET))
-                .setName(
-                    Component.translatable(
-                        "menu.smartstorage.port.fluid_kind",
-                        NamedTextColor.GRAY,
-                        Component.translatable(fluid?.localizedName ?: "menu.smartstorage.port.off", NamedTextColor.GREEN)
-                    ).withoutPreFormatting()
-                )
-                .addLoreLines(
-                    Component.translatable("menu.smartstorage.port.fluid_kind.hint", NamedTextColor.DARK_GRAY)
-                        .withoutPreFormatting()
-                )
-        }
-
         //</editor-fold>
 
     }
@@ -789,7 +644,7 @@ class StorageInterface(
         override val gui = Gui.builder()
             .setStructure(
                 ". . . . . . . . u",
-                ". i n 1 2 3 4 5 6",
+                "n i . 1 2 3 4 5 6",
                 ". . . . . . . . ."
             )
             .addIngredient('u', OpenUpgradesItem(upgradeHolder))
@@ -831,11 +686,6 @@ class StorageInterface(
                         NamedTextColor.GRAY,
                         Component.text(itemsPerTick(), NamedTextColor.GREEN)
                     ).withoutPreFormatting(),
-                    Component.translatable(
-                        "menu.smartstorage.interface.fluid_rate",
-                        NamedTextColor.GRAY,
-                        Component.text(NumberFormatUtils.getFluidString(fluidPerTick()), NamedTextColor.GREEN)
-                    ).withoutPreFormatting()
                 )
             )
             return builder

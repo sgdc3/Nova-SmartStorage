@@ -1,0 +1,13 @@
+{
+  "result": "smartstorage:fluid_connector",
+  "shape": [
+    "iri",
+    "ibi",
+    "iri"
+  ],
+  "ingredients": {
+    "i": "minecraft:iron_ingot",
+    "r": "minecraft:redstone",
+    "b": "minecraft:bucket"
+  }
+}

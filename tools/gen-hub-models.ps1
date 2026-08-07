@@ -35,6 +35,9 @@ $TEX_CASING = 'smartstorage:block/storage_casing'
 $hubs = @(
     @{ name = 'connector'; core = 'smartstorage:block/storage_connector'; port = 'smartstorage:block/storage_connector_port' }
     @{ name = 'interface'; core = 'smartstorage:block/storage_interface'; port = 'smartstorage:block/storage_interface_port' }
+    # the fluid pair: same geometry, same UVs, different core and port textures - see gen-block-textures
+    @{ name = 'fluid_connector'; core = 'smartstorage:block/fluid_connector'; port = 'smartstorage:block/fluid_connector_port' }
+    @{ name = 'fluid_interface'; core = 'smartstorage:block/fluid_interface'; port = 'smartstorage:block/fluid_interface_port' }
 )
 
 # Every family below is written twice, lit and dark, because a hub the controller is not powering should

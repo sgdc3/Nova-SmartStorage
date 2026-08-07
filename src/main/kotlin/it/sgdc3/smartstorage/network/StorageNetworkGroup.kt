@@ -55,6 +55,21 @@ internal class StorageNetworkGroup(
     @Volatile
     private var fluidProviders: List<FluidProvider>
 
+    /**
+     * Seeded from the controller rather than started at "no controller", and the difference is half a
+     * second of every device on the system going dark.
+     *
+     * A group is built the moment the topology changes and does not run until its type's tick delay
+     * comes round — ten ticks for this one, with a random offset on top. Reporting offline in the
+     * meantime used to be invisible, because devices went on pointing at the *old* group until something
+     * reassigned them. Now that they are handed the new one immediately, an honest "I have not looked
+     * yet" would blink the whole base off every time a cable was placed.
+     *
+     * The controller is a block, so it outlives the groups and remembers what the last one concluded.
+     * Believing it for one tick is optimistic in exactly one direction — a system that has just become
+     * invalid keeps working until the first tick says otherwise — which is the same tolerance
+     * [isOnline]'s staleness window already grants, and it corrects itself without anyone noticing.
+     */
     @Volatile
     var status: StorageNetworkStatus = StorageNetworkStatus.offline(OfflineReason.NO_CONTROLLER)
         private set
@@ -90,6 +105,21 @@ internal class StorageNetworkGroup(
         this.controllers = this.endPoints.filterIsInstance<StorageControllerNode>()
         this.providers = collectProviders()
         this.fluidProviders = collectFluidProviders()
+
+        // Believe the controller until this group has looked for itself, and the difference is half a
+        // second of every device on the system going dark.
+        //
+        // A group is built the moment the topology changes and does not run until its type's tick delay
+        // comes round — ten ticks for this one, with a random offset on top. Starting at "no controller"
+        // used to be invisible, because devices went on pointing at the *old* group until something
+        // reassigned them; now that they are handed this one immediately, an honest "I have not looked
+        // yet" blinks the whole base off every time a cable is placed.
+        //
+        // The controller is a block, so it outlives the groups and remembers what the last one
+        // concluded. Believing it is optimistic in exactly one direction — a system that has just become
+        // invalid keeps working until the first tick says otherwise — which is the same tolerance
+        // [isOnline]'s staleness window already grants.
+        controllers.singleOrNull()?.status?.let { status = it }
 
         for (network in networks) {
             network.group = this

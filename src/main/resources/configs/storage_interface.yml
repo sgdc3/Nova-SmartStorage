@@ -8,20 +8,16 @@ exposed_slots: 27
 # routes on this; it only decides how quickly "nothing there" becomes "there, but switched off".
 neighbour_rescan_ticks: 20
 
-# How much the interface moves per network tick, before Speed Upgrades, per direction.
+# How many items the interface moves per network tick, before Speed Upgrades, per direction.
 #
 # It needs a rate of its own because Nova will not give it one. A network's throughput is the lowest
-# among its *cables*, with no floor under it — and an interface bolted straight onto a chest or a tank
-# has no cable at all, so before this it moved everything it could reach in a single tick. Fluids were
-# the visible case: fluid networks tick every tick by default, so a tank filled instantly.
+# among its *cables*, with no floor under it — and an interface bolted straight onto a chest has no cable
+# at all, so before this it moved everything it could reach in one go.
 #
-# With Nova's defaults an item network ticks once a second and a fluid network every tick, so 8 and 100
-# mean roughly eight items a second and a tenth of a bucket a tick — one bucket every two seconds.
+# With Nova's defaults an item network ticks once a second, so 8 is roughly eight items a second.
 base_item_transfer: 8.0
-base_fluid_transfer: 100.0
 
-# The multiplier per Speed Upgrade. One upgrade means one thing here: the interface gets faster, whether
-# what is passing through is items or fluid. The list length is the limit, so ten upgrades take it to
-# eleven times the numbers above.
+# The multiplier per Speed Upgrade. The list length is the limit, so ten upgrades take it to eleven
+# times the number above.
 upgrade_values:
   speed: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 ]

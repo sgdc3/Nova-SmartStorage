@@ -9,7 +9,6 @@ import it.sgdc3.smartstorage.registry.Models
 import it.sgdc3.smartstorage.registry.NetworkTypes
 import it.sgdc3.smartstorage.registry.TERMINAL_REFRESH_TICKS
 import it.sgdc3.smartstorage.network.DEFAULT_PRIORITY
-import it.sgdc3.smartstorage.network.FluidProvider
 import it.sgdc3.smartstorage.network.PRIORITY_RANGE
 import it.sgdc3.smartstorage.network.StorageEndPoint
 import it.sgdc3.smartstorage.network.StorageHolder
@@ -48,9 +47,6 @@ import xyz.xenondevs.nova.world.block.tileentity.TileEntity
 import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
 import xyz.xenondevs.nova.world.block.tileentity.network.node.NetworkEndPoint
 import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkConnectionType
-import xyz.xenondevs.nova.world.block.tileentity.network.type.fluid.FluidType
-import xyz.xenondevs.nova.world.block.tileentity.network.type.fluid.container.NetworkedFluidContainer
-import xyz.xenondevs.nova.world.block.tileentity.network.type.fluid.holder.FluidHolder
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.ItemFilter
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.holder.ItemHolder
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.inventory.NetworkedInventory
@@ -146,14 +142,6 @@ class StorageConnector(
     override var storageProviders: List<StorageProvider> = emptyList()
         private set
 
-    /**
-     * Only the sides that currently have a tank, published the same way and for the same reason. A side
-     * is never in both lists: a neighbour is a container or a tank, not both.
-     */
-    @Volatile
-    override var fluidProviders: List<FluidProvider> = emptyList()
-        private set
-
     init {
         holders += storageHolder
     }
@@ -193,11 +181,8 @@ class StorageConnector(
 
     private fun clearPorts() {
         storageProviders = emptyList()
-        fluidProviders = emptyList()
-        for (port in ports.values) {
+        for (port in ports.values)
             port.backing = null
-            port.fluidBacking = null
-        }
     }
 
     private fun refreshContainers() {
@@ -210,9 +195,7 @@ class StorageConnector(
                 active += face
         }
 
-        val mounted = active.map(ports::getValue)
-        storageProviders = mounted.filter { it.backing != null }
-        fluidProviders = mounted.filter { it.fluidBacking != null }
+        storageProviders = active.map(ports::getValue).filter { it.backing != null }
 
         if (setPortFaces(active))
             menuContainer.forEachMenu(StorageConnectorMenu::update)
@@ -232,33 +215,10 @@ class StorageConnector(
         // builds anything — unlike reading a block, which loads the chunk to answer.
         if (!pos.world.isChunkLoaded(neighbour.x shr 4, neighbour.z shr 4)) {
             port.backing = null
-            port.fluidBacking = null
             return
         }
 
-        val tileEntity = WorldDataManager.getTileEntity(neighbour)
-        port.backing = resolveBacking(neighbour, tileEntity)
-        port.fluidBacking = resolveFluidBacking(tileEntity)
-    }
-
-    /**
-     * A tank, of any kind Nova recognises as one.
-     *
-     * There is no vanilla half to this, which is why it is so much shorter than [resolveBacking]: a
-     * cauldron is not a tank in any sense the network could use — three levels of water, no type it will
-     * report, and no way to put lava in it — so a fluid side is a Nova end point or it is nothing.
-     */
-    private fun resolveFluidBacking(tileEntity: TileEntity?): FluidBacking? {
-        if (tileEntity == null || tileEntity is StorageEndPoint || tileEntity !is NetworkEndPoint)
-            return null
-
-        val holder = tileEntity.holders.filterIsInstance<FluidHolder>().firstOrNull() ?: return null
-        val container = holder.containers
-            .entries.firstOrNull { (_, type) -> type == NetworkConnectionType.BUFFER }
-            ?.key
-            ?: return null
-
-        return FluidBacking(container)
+        port.backing = resolveBacking(neighbour, WorldDataManager.getTileEntity(neighbour))
     }
 
     /**
@@ -596,73 +556,6 @@ class StorageConnector(
     }
 
     /**
-     * A tank, seen through Nova's own [NetworkedFluidContainer].
-     *
-     * Much simpler than its item counterpart, and for a reason worth stating: a fluid container holds
-     * *one* type at a time and reports it, so there is no contents array to walk, no slot to address and
-     * no snapshot to keep. Everything here is a field read on the container.
-     *
-     * The same threading trade as [NetworkedBacking]: this is the interface Nova's fluid network drives
-     * from its own ticker, so the reference is resolved once and used straight from ours, and the race
-     * against another addon's group tick is accepted rather than solved — see the class KDoc.
-     */
-    private class FluidBacking(private val container: NetworkedFluidContainer) : FluidBackingSource {
-
-        override val identity: Any
-            get() = container
-
-        override val usedAmount: Long
-            get() = container.amount
-
-        override val totalAmount: Long
-            get() = container.capacity
-
-        override fun amountOf(type: FluidType): Long =
-            if (container.type == type) container.amount else 0L
-
-        override fun collectFluidsInto(index: MutableMap<FluidType, Long>) {
-            val type = container.type ?: return
-            val amount = container.amount
-            if (amount > 0L)
-                index.merge(type, amount) { a, b -> a + b }
-        }
-
-        override fun insertFluid(type: FluidType, amount: Long): Long {
-            if (!container.accepts(type))
-                return 0L
-
-            return container.addFluid(type, amount)
-        }
-
-        override fun extractFluid(type: FluidType, amount: Long): Long {
-            // takeFluid has no type parameter: it takes from whatever is in there, so the check has to
-            // happen here or a request for water would come back with lava
-            if (container.type != type)
-                return 0L
-
-            return container.takeFluid(amount)
-        }
-
-    }
-
-    /**
-     * What a port is mounted on for fluids. One implementation today; an interface anyway, so that the
-     * port can hold "a tank of some kind" without knowing which.
-     */
-    sealed interface FluidBackingSource {
-
-        val identity: Any
-        val usedAmount: Long
-        val totalAmount: Long
-
-        fun amountOf(type: FluidType): Long
-        fun collectFluidsInto(index: MutableMap<FluidType, Long>)
-        fun insertFluid(type: FluidType, amount: Long): Long
-        fun extractFluid(type: FluidType, amount: Long): Long
-
-    }
-
-    /**
      * One of this addon's own barrels.
      *
      * Read directly rather than through the one-slot view Nova's item network gets, because that view
@@ -751,13 +644,10 @@ class StorageConnector(
     /**
      * One side of the connector, and everything the network knows about the storage mounted there.
      */
-    inner class ContainerPort(private val face: BlockFace) : StorageProvider, FluidProvider {
+    inner class ContainerPort(private val face: BlockFace) : StorageProvider {
 
         @Volatile
         var backing: Backing? = null
-
-        @Volatile
-        var fluidBacking: FluidBackingSource? = null
 
         /**
          * The three settings a player owns, and the one place in this class not marked `@Volatile`
@@ -784,7 +674,7 @@ class StorageConnector(
          * in turn drops the chain behind the model if it was only justified by this port.
          */
         val isActive: Boolean
-            get() = (backing != null || fluidBacking != null) && (allowInsert || allowExtract)
+            get() = backing != null && (allowInsert || allowExtract)
 
         private var filter: ItemFilter<*>? by storedValue("filter_${face.name}")
         val filterInventory = VirtualInventory(null, 1, arrayOfNulls(1), intArrayOf(1))
@@ -836,7 +726,7 @@ class StorageConnector(
         // whichever kind of storage is on this side; a side is only ever one of the two, so there is no
         // ordering question here, only a fallback for a side with nothing on it
         override val storageIdentity: Any
-            get() = backing?.identity ?: fluidBacking?.identity ?: this
+            get() = backing?.identity ?: this
 
         override val cellCount: Int
             get() = if (backing != null) 1 else 0
@@ -892,53 +782,6 @@ class StorageConnector(
                 return 0L
 
             return backing?.extract(type, amount) ?: 0L
-        }
-
-        //</editor-fold>
-
-        //<editor-fold desc="FluidProvider", defaultstate="collapsed">
-
-        override val usedAmount: Long
-            get() = fluidBacking?.usedAmount ?: 0L
-
-        override val totalAmount: Long
-            get() = fluidBacking?.totalAmount ?: 0L
-
-        override val hasFluidRoom: Boolean
-            get() = allowInsert && fluidBacking?.let { it.usedAmount < it.totalAmount } == true
-
-        override fun collectFluidsInto(index: MutableMap<FluidType, Long>) {
-            fluidBacking?.collectFluidsInto(index)
-        }
-
-        override fun amountOf(type: FluidType): Long = fluidBacking?.amountOf(type) ?: 0L
-
-        /**
-         * The same rule as [extractableCountOf], and it matters more here: an over-promised fluid is not
-         * merely created, it makes Nova's distributor throw halfway through a transfer it has already
-         * half performed.
-         */
-        override fun extractableAmountOf(type: FluidType): Long =
-            if (allowExtract) amountOf(type) else 0L
-
-        /**
-         * The filter does not gate fluids. It used to, by the bucket that carries them, which made a
-         * filter slot mean two unrelated things depending on what happened to be mounted on that side —
-         * and left a player who had filtered a chest wondering why their tank had stopped filling. A
-         * filter is about items; a fluid side is governed by its two direction switches.
-         */
-        override fun insertFluid(type: FluidType, amount: Long): Long {
-            if (!allowInsert)
-                return 0L
-
-            return fluidBacking?.insertFluid(type, amount) ?: 0L
-        }
-
-        override fun extractFluid(type: FluidType, amount: Long): Long {
-            if (!allowExtract)
-                return 0L
-
-            return fluidBacking?.extractFluid(type, amount) ?: 0L
         }
 
         //</editor-fold>
@@ -1104,7 +947,7 @@ class StorageConnector(
         override val gui = Gui.builder()
             .setStructure(
                 ". . . . . . . . .",
-                ". i n 1 2 3 4 5 6",
+                "n i . 1 2 3 4 5 6",
                 ". . . . . . . . ."
             )
             .addIngredient('i', statusItem)

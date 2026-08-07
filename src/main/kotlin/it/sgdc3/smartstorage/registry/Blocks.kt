@@ -6,6 +6,8 @@ import it.sgdc3.smartstorage.SmartStorage.tileEntity
 import it.sgdc3.smartstorage.tileentity.BarrelController
 import it.sgdc3.smartstorage.tileentity.CraftingTerminal
 import it.sgdc3.smartstorage.tileentity.DriveBay
+import it.sgdc3.smartstorage.tileentity.FluidConnector
+import it.sgdc3.smartstorage.tileentity.FluidInterface
 import it.sgdc3.smartstorage.tileentity.FluidTerminal
 import it.sgdc3.smartstorage.tileentity.StorageBarrel
 import it.sgdc3.smartstorage.tileentity.StorageCable
@@ -127,6 +129,10 @@ object Blocks {
 
     val STORAGE_INTERFACE: NovaTileEntityBlock = hub("storage_interface", "interface", ::StorageInterface)
     val STORAGE_CONNECTOR: NovaTileEntityBlock = hub("storage_connector", "connector", ::StorageConnector)
+
+    // the same two blocks for fluids: same shape, same six live sides, different thing flowing through
+    val FLUID_INTERFACE: NovaTileEntityBlock = hub("fluid_interface", "fluid_interface", ::FluidInterface)
+    val FLUID_CONNECTOR: NovaTileEntityBlock = hub("fluid_connector", "fluid_connector", ::FluidConnector)
 
     /**
      * The name of the model a device wears right now: the lit one, or the dark twin.

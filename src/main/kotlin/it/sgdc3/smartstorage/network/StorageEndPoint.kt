@@ -263,6 +263,15 @@ interface StorageControllerNode : StorageEndPoint {
     val maxDevices: Int
 
     /**
+     * What this controller was last told about the system it drives.
+     *
+     * Read back by a freshly built [StorageNetworkGroup], which has not run yet and would otherwise have
+     * to report "no controller" until its first tick. The controller outlives the groups — it is a block
+     * — so it is the only thing that remembers across a rebuild.
+     */
+    val status: StorageNetworkStatus
+
+    /**
      * Draws the energy needed to keep [devices] devices and [cells] cells running for one network tick.
      *
      * @return whether enough energy was available; when false the network goes offline for this tick.

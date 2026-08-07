@@ -34,6 +34,14 @@ object Models {
     val CONNECTOR_ATTACHMENT_OFF: NovaItem = port("connector", lit = false)
     val INTERFACE_ATTACHMENT_OFF: NovaItem = port("interface", lit = false)
 
+    /**
+     * And the same four for the fluid pair, which are separate blocks with their own artwork.
+     */
+    val FLUID_CONNECTOR_ATTACHMENT: NovaItem = port("fluid_connector", lit = true)
+    val FLUID_INTERFACE_ATTACHMENT: NovaItem = port("fluid_interface", lit = true)
+    val FLUID_CONNECTOR_ATTACHMENT_OFF: NovaItem = port("fluid_connector", lit = false)
+    val FLUID_INTERFACE_ATTACHMENT_OFF: NovaItem = port("fluid_interface", lit = false)
+
     private fun port(hub: String, lit: Boolean): NovaItem {
         val path = if (lit) "attachment" else "attachment_off"
         return item(if (lit) "${hub}_attachment" else "${hub}_attachment_off") {

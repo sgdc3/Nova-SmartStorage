@@ -451,6 +451,126 @@ $textures = @(
             '................'
         )
     }
+    @{
+        # The fluid connector and its port, and the fluid interface and its port.
+        #
+        # Deliberately the same shapes as the four above, in water blue instead of amber. A player has
+        # already learnt that a small cube with four lit corners is a connector and that a diagonal split
+        # is an interface; making the fluid pair a different shape would be teaching them twice. The
+        # colour is what says which of the two a block moves, and it is the one thing that differs.
+        name = 'fluid_connector'
+        palette = @{ '2' = @(90, 190, 255) }
+        off = $true
+        frametime = 70
+        frames = @(
+            @{}
+            @{ '2' = @(52, 110, 148) }
+        )
+        rows = @(
+            '................',
+            '................',
+            '................',
+            '................',
+            '....dddddddd....',
+            '....dkkkkkkd....',
+            '....dk2kk2kd....',
+            '....dkkkkkkd....',
+            '....dkkkkkkd....',
+            '....dk2kk2kd....',
+            '....dkkkkkkd....',
+            '....dddddddd....',
+            '................',
+            '................',
+            '................',
+            '................'
+        )
+    }
+    @{
+        name = 'fluid_connector_port'
+        palette = @{ '2' = @(90, 190, 255) }
+        off = $true
+        frametime = 70
+        frames = @(
+            @{}
+            @{ '2' = @(52, 110, 148) }
+        )
+        rows = @(
+            '................',
+            '................',
+            '..dddddddddddd..',
+            '..db........bd..',
+            '..d.dddddddd.d..',
+            '..d.dkk22kkd.d..',
+            '..d.dkkkkkkd.d..',
+            '..d.d2kkkk2d.d..',
+            '..d.d2kkkk2d.d..',
+            '..d.dkkkkkkd.d..',
+            '..d.dkk22kkd.d..',
+            '..d.dddddddd.d..',
+            '..db........bd..',
+            '..dddddddddddd..',
+            '................',
+            '................'
+        )
+    }
+    @{
+        # The same diagonal split the item interface has: one colour for what goes in, one for what comes
+        # out. Both are blues here, because both halves are the same fluid going opposite ways.
+        name = 'fluid_interface'
+        palette = @{ '2' = @(120, 215, 255); '5' = @(60, 130, 210) }
+        off = $true
+        frametime = 55
+        frames = @(
+            @{ '5' = @(32, 68, 110) }
+            @{ '2' = @(64, 112, 132) }
+        )
+        rows = @(
+            '................',
+            '................',
+            '................',
+            '................',
+            '....dddddddd....',
+            '....dkkkkkkd....',
+            '....dk22kkkd....',
+            '....dk2kkkkd....',
+            '....dkkkk5kd....',
+            '....dkkk55kd....',
+            '....dkkkkkkd....',
+            '....dddddddd....',
+            '................',
+            '................',
+            '................',
+            '................'
+        )
+    }
+    @{
+        name = 'fluid_interface_port'
+        palette = @{ '2' = @(120, 215, 255); '5' = @(60, 130, 210) }
+        off = $true
+        frametime = 55
+        frames = @(
+            @{ '5' = @(32, 68, 110) }
+            @{ '2' = @(64, 112, 132) }
+        )
+        rows = @(
+            '................',
+            '................',
+            '..dddddddddddd..',
+            '..db........bd..',
+            '..d.dddddddd.d..',
+            '..d.dkk22kkd.d..',
+            '..d.dkkkkkkd.d..',
+            '..d.d2kkkk5d.d..',
+            '..d.d2kkkk5d.d..',
+            '..d.dkkkkkkd.d..',
+            '..d.dkk55kkd.d..',
+            '..d.dddddddd.d..',
+            '..db........bd..',
+            '..dddddddddddd..',
+            '................',
+            '................'
+        )
+    }
 )
 
 function Get-Noise([int] $x, [int] $y) {

@@ -1,10 +1,10 @@
 package it.sgdc3.smartstorage.tileentity
 
-import it.sgdc3.smartstorage.SmartStorage
 import it.sgdc3.smartstorage.gui.ClickableItem
 import it.sgdc3.smartstorage.registry.Blocks.BARREL_CONTROLLER
 import it.sgdc3.smartstorage.registry.GuiTextures
 import it.sgdc3.smartstorage.storage.ItemType
+import it.sgdc3.smartstorage.util.RateLimitedError
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Material
@@ -54,6 +54,11 @@ private val RESCAN_TICKS by BARREL_CONTROLLER.config.entry<Int>("rescan_ticks")
  * One barrel per exposed slot, so the item network sees the wall rather than the block it is wired to.
  */
 private val EXPOSED_SLOTS = MAX_BARRELS
+
+/**
+ * Shared by every controller, for the same reason [StorageBarrel]'s is shared by every barrel.
+ */
+private val SHORTFALL = RateLimitedError()
 
 /**
  * Speaks for every [StorageBarrel] it can reach, so that one pipe — or one [StorageConnector] — serves
@@ -348,10 +353,10 @@ class BarrelController(
             val taken = barrel.extract(type, amount.toLong())
 
             if (taken < amount) {
-                SmartStorage.logger.error(
+                SHORTFALL.log {
                     "Barrel wall at $pos handed out $amount× $type but only had $taken: " +
                         "${amount - taken} item(s) were created."
-                )
+                }
             }
         }
 

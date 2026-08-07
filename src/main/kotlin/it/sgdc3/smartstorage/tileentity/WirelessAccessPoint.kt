@@ -83,7 +83,7 @@ class WirelessAccessPoint(
         override val gui = Gui.builder()
             .setStructure(
                 ". . . . . . . . .",
-                ". . . i n . . . .",
+                ". . . n i . . . .",
                 ". . . . . . . . ."
             )
             .addIngredient('i', statusItem)

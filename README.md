@@ -19,14 +19,21 @@ storage cells, and access everything from a single terminal.
 | **Crafting Terminal** | Same, plus a 3×3 grid that refills itself from the network after every craft. |
 | **Fluid Terminal** | The network's water and lava, a bucket at a time. |
 | **Wireless Access Point** | A place a network can be reached from. Does nothing else. |
-| **Storage Interface** | Mounts on a block and exposes the whole network to Nova's **item** network. Two filter slots, one per direction. |
+| **Storage Interface** | Mounts on a block and exposes the whole network to Nova's **item** network. Two filter slots per side, one per direction. Moves a fixed number of items per network tick; Speed Upgrades raise it. |
 | **Storage Connector** | Turns every container it touches — chest, barrel, shulker box, hopper, Logistics storage unit — into network storage, all six sides at once. A filter, a priority and direction switches per side. |
+| **Fluid Interface** | The same for Nova's **fluid** network: everything the system holds, as a pair of tanks. A fluid picker per side rather than a filter. Rate-limited the same way, with the same upgrade. |
+| **Fluid Connector** | Turns every tank it touches into network fluid storage, all six sides at once. A priority and direction switches per side. |
 | **Storage Barrel** | Holds one kind of item, thousands of them, and shows which and how many on its front. 32 stacks, doubling with each Storage Upgrade. |
 | **Barrel Controller** | Speaks for every barrel it can reach through touching neighbours, so one pipe or one connector serves a whole wall. Searchable list of what the wall holds. |
 
 Every device tells you from across the room whether it is running: its lights blink while the controller
 is keeping it alive, and it goes dark and still when it is not. So a network that has lost power, gained
 a second controller or run past its device limit is visible without opening anything.
+
+Open one and a lamp in its menu says the same thing in words, and says *which* thing: no controller, two
+controllers, past the device limit, out of energy, or — the one the block works out about itself rather
+than reads off the network — cut off from the network it was on. Every device shows the same lamp, in the
+same place, because "is this thing on the network" is one question and deserves one answer.
 
 | Item | Types | Items |
 |---|---|---|
@@ -83,9 +90,10 @@ rule rather than merely declining to break it: turning extraction on for a side 
 straight back off, and pulling the filter out of a side that was extracting closes it. The switch says
 why when it will not move.
 
-**Fluids are governed by the same slot**, named by the bucket that carries them — the same trick the
-connector's filter uses. A side hands out lava when its extract filter says a lava bucket may pass, and
-a picker on the side's menu chooses which of Nova's two fluids that side deals in.
+**Filters are about items and nothing else.** A filter is a list of the many things that may pass, and
+"which of Nova's two fluids" is not a question shaped like that. A Fluid Interface side answers it with a
+picker; a Fluid Connector side does not ask, because the tank against it has already decided. Neither has
+a filter slot, and that is an omission on purpose.
 
 There is deliberately no side config menu on the interface. It would be a second way to set the same
 things, and a second way that does not know about the rule above.
@@ -96,18 +104,21 @@ filled first and emptied last, which is the single rule that lets a player say "
 drive bays and let the chests take the overflow": raise the bays and the chests only ever hold what is
 spilling over. The rule is written on the priority button itself, in both menus.
 
-Neither of these two is drawn as a cube, and neither has a facing: both are hubs, live on all six sides,
-built like the junction Nova's own pipes make where they meet a container. A core, an arm towards every
-device they are wired to, and a port against every side they serve.
+None of these four is drawn as a cube, and none has a facing: they are hubs, live on all six sides, built
+like the junction Nova's own pipes make where they meet a container. A core, an arm towards every device
+they are wired to, and a port against every side they serve. The fluid pair is the same geometry in water
+blue rather than amber — the shape tells you *what* the block is, the colour *what flows through it*, and
+giving them different silhouettes would teach you the same thing twice.
 
 That means one connector wedged between two chests serves both, and a row of barrels needs one connector
 rather than one per barrel. The connector's menu counts what it found; the interface grows a port
-against each item network endpoint next to it.
+against each endpoint of its own network type next to it.
 
-Each port configures the one side it faces. Right-click a port and you get that side alone: on a
+Each port configures the one side it faces. Right-click a port and you get that side alone: on a storage
 connector its own filter, its own priority and switches for storing and taking, because a chest kept for
-overflow and a barrel kept for iron are two different pieces of storage that happen to share a
-connector; on an interface, the same two switches for that face. Right-click the core instead for the
+overflow and a barrel kept for iron are two different pieces of storage that happen to share a connector;
+on a storage interface, the same two switches and that face's pair of filters; on either fluid block, the
+switches and the priority, plus the fluid picker on the interface. Right-click the core instead for the
 summary, which lists all six sides — including the ones with nothing on them, which is where you go to
 switch a side back on.
 
@@ -173,6 +184,23 @@ Because it sits on both the storage network and Nova's item network, everything 
 That is why this addon has no import or export buses of its own: they'd be a worse version of what
 already exists.
 
+### Throughput
+
+Both interfaces move a bounded amount per network tick, and both take **Speed Upgrades** to move more.
+
+They need a rate of their own because Nova will not give them one. A network's throughput is the lowest
+among its *cables*, with no floor under it — and an interface bolted straight onto a chest or a tank
+belongs to a network with no cable at all, so it had no limit. Fluid networks tick every tick, which made
+that visible immediately: the whole system emptied into the tank the instant it was attached.
+
+The budget is *set* each tick rather than accumulated. An interface nobody used for a minute has not
+banked a minute's worth of throughput, or the first thing to touch it would empty the system after all.
+It is counted per direction, so a side being drained does not slow the one being filled.
+
+Stock rates are 8 items and 100 fluid units per network tick — with Nova's own timings, about 8 items and
+2 buckets a second — and ten Speed Upgrades take either to eleven times that. Both live in the block's
+own config.
+
 ### Fluids
 
 Nova has exactly two fluids, water and lava, counted in units of which 1000 make a bucket. That one fact
@@ -180,24 +208,29 @@ shapes everything here: what a fluid cell is worth is its capacity, not how many
 hold, so a fluid cell has one number and no type limit. Put four buckets of lava in a 16B cell and there
 is that much less room for water.
 
-The same network carries both kinds of storage. A **fluid cell** in a drive bay, or a **tank** a Storage
+The same network carries both kinds of storage. A **fluid cell** in a drive bay, or a **tank** a Fluid
 Connector is mounted on, is capacity the network can use; the bay's priority and the connector's per-side
-priority order fluids exactly as they order items. A connector's filter gates fluids too, by the bucket
-that carries them — a filter holding a water bucket makes that side a water tank.
+priority order fluids exactly as they order items.
 
-There is no vanilla half to the connector's fluid support. A cauldron is not a tank in any sense the
-network could use: three levels of water, no type it will report, and no way to put lava in it. A fluid
-side is a Nova end point or it is nothing.
+There is no vanilla half to the fluid connector. A cauldron is not a tank in any sense the network could
+use: three levels of water, no type it will report, and no way to put lava in it. A fluid side is a Nova
+end point with a tank on it, or it is nothing.
 
-The **Storage Interface** carries fluids as well, through one tank per fluid. It has to be two, because
-Nova's fluid containers hold one type at a time and a storage network does not — so a face configured to
-the water tank is really a choice about what comes *out* of that side; either will take whatever it is
+The **Fluid Interface** presents everything the system holds as one tank per fluid. It has to be two,
+because Nova's fluid containers hold one type at a time and a storage network does not — so choosing a
+side's fluid is really a choice about what comes *out* of it; either tank will take whatever it is
 handed. Both accept every fluid type on paper, because Nova skips a whole channel if any container on it
 disallows the fluid being moved, and an interface that quietly stopped somebody's lava pipes by being
 attached to them would be a worse bug than the one it prevents.
 
-Fluid sides start at **insert only**, and stay that way until the side's extract filter names the fluid
-by its bucket — the same rule and the same slot as the item side.
+Fluid sides start at **insert only**. Nothing leaves one until somebody opens its extract switch — the
+same rule as the item side, without the filter that enforces it there.
+
+Fluids used to live on the Storage Interface and the Storage Connector, and splitting them out is worth
+the two extra recipes: the merged blocks made every side ask two unrelated questions — is there a chest
+here, is there a tank here — and answer both in one menu, when in practice a side has one thing against
+it. **Blocks placed before the split keep only their item half**; a world that was using them for fluids
+needs the new pair put down.
 
 The **Fluid Terminal** is a separate block rather than a tab in the item terminal, because the two have
 almost nothing in common past the name: one is a scrolling, searchable, sortable list of hundreds of
@@ -440,7 +473,8 @@ Config files are extracted to `plugins/SmartStorage/configs/` on first run.
 | `storage_controller.yml` | `max_energy`, `energy_per_device`, `energy_per_cell`, `max_devices`, upgrade curves |
 | `storage_cell_*.yml` | `max_types`, `max_items` per tier |
 | `fluid_cell_*.yml` | `max_amount` per tier, in fluid units — 1000 to the bucket |
-| `storage_interface.yml` | `exposed_slots` — how many types the item network sees at once; `neighbour_rescan_ticks` |
+| `storage_interface.yml` | `exposed_slots` — how many types the item network sees at once; `base_item_transfer` and its Speed Upgrade curve; `neighbour_rescan_ticks` |
+| `fluid_interface.yml` | `base_transfer` in fluid units per network tick, and its Speed Upgrade curve |
 | `drive_bay.yml` | `base_slots`, and the disk slots added per Storage Upgrade |
 | `crafting_terminal.yml` | `max_bulk_crafts` |
 | `storage_barrel.yml` | `base_stacks`, the capacity multiplier per Storage Upgrade, and the Void Upgrade switch |

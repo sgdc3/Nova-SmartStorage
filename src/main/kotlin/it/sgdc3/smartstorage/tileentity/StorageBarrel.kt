@@ -1,6 +1,5 @@
 package it.sgdc3.smartstorage.tileentity
 
-import it.sgdc3.smartstorage.SmartStorage
 import it.sgdc3.smartstorage.gui.ClickableItem
 import it.sgdc3.smartstorage.registry.BlockStateProperties
 import it.sgdc3.smartstorage.registry.Blocks.STORAGE_BARREL
@@ -8,6 +7,7 @@ import it.sgdc3.smartstorage.registry.GuiTextures
 import it.sgdc3.smartstorage.registry.UpgradeTypes
 import it.sgdc3.smartstorage.storage.ItemType
 import it.sgdc3.smartstorage.storage.StorageLock
+import it.sgdc3.smartstorage.util.RateLimitedError
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Material
@@ -50,6 +50,11 @@ private val BASE_STACKS by STORAGE_BARREL.config.entry<Int>("base_stacks")
  * capacity for an empty barrel, since what it can really take is not known until something is in it.
  */
 private const val NOMINAL_STACK_SIZE = 64
+
+/**
+ * Shared by every barrel, so a wall of them cannot multiply one bug into a flood of identical lines.
+ */
+private val SHORTFALL = RateLimitedError()
 
 /**
  * A barrel that holds one kind of item, a great many of them, and says on its front what and how many.
@@ -601,10 +606,10 @@ class StorageBarrel(
             val taken = extract(current, amount.toLong())
 
             if (taken < amount) {
-                SmartStorage.logger.error(
+                SHORTFALL.log {
                     "Barrel at $pos handed out $amount× $current but only had $taken: " +
                         "${amount - taken} item(s) were created."
-                )
+                }
             }
         }
 

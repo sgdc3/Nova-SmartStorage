@@ -208,8 +208,8 @@ class FluidTerminal(
          */
         private fun structure(): Array<String> {
             val row = CharArray(9) { '.' }
-            row[1] = 'i'
-            row[2] = 'n'
+            row[1] = 'n'
+            row[2] = 'i'
             FluidType.entries.forEachIndexed { index, _ -> row[3 + index] = '1' + index }
 
             return arrayOf(

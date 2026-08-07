@@ -1,10 +1,16 @@
 package it.sgdc3.smartstorage.network
 
-import it.sgdc3.smartstorage.SmartStorage
 import it.sgdc3.smartstorage.storage.ItemType
+import it.sgdc3.smartstorage.util.RateLimitedError
 import org.bukkit.inventory.ItemStack
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.inventory.NetworkedInventory
 import java.util.UUID
+
+/**
+ * Shared by every view: one network handing out what it did not have would otherwise be one log line per
+ * transfer per tick, from every interface at once.
+ */
+private val SHORTFALL = RateLimitedError()
 
 /**
  * Presents an entire storage network to Nova's item network as if it were a plain inventory.
@@ -106,11 +112,11 @@ class NetworkView internal constructor(
         output.spend(taken)
 
         if (taken < amount) {
-            SmartStorage.logger.error(
+            SHORTFALL.log {
                 "Storage network handed out $amount× $type but only had $taken: " +
                     "${amount - taken} item(s) were created. This means canTake promised what extract " +
                     "could not deliver — see NetworkView.take."
-            )
+            }
         }
     }
 

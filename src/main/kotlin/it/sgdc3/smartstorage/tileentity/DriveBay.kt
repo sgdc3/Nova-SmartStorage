@@ -544,7 +544,7 @@ class DriveBay(
                 ". . . . . . . . u",
                 ". c c c c c c . p",
                 ". c c c c c c . v",
-                ". i n . . . . . m"
+                ". n i . . . . . m"
             )
             .addIngredient('c', cellInventory)
             .addIngredient('u', OpenUpgradesItem(upgradeHolder))

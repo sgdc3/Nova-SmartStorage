@@ -25,5 +25,19 @@ import java.util.concurrent.locks.ReentrantLock
  * implementation detail of the ticker, not a contract — so the lock stays. It is cheap when uncontended
  * and it is the only thing that would keep this correct if Nova ever ticked networks off the main
  * thread's critical path.
+ *
+ * ## The one thing that would not survive that change
+ *
+ * This lock and InvUI's own monitors are taken in **both orders**, and only the ticker keeps that from
+ * mattering. A network transfer holds this lock and then reaches into InvUI, because every provider
+ * notifies its open menus once it has moved something; a menu click goes the other way, taking whatever
+ * InvUI holds during a click and then this lock, because that is what taking an item out of a terminal
+ * or pulling a cell from a drive bay does.
+ *
+ * Two threads doing those at once is the textbook deadlock, and the only reason it cannot happen is the
+ * paragraph above: the tick blocks the server thread, so there is never a second thread in the other
+ * order. Anyone making network ticks genuinely concurrent has to break one of the two directions —
+ * most likely by moving the menu notifications out of the guarded section — and not merely widen this
+ * lock's coverage.
  */
 internal object StorageLock : ReentrantLock()

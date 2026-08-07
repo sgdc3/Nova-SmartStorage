@@ -314,12 +314,14 @@ class StorageConnector(
         // without this, a walled-in connector built six CraftBlockStates a tick, forever, to be told six
         // times a tick that stone is not a chest. Container materials are still resolved every tick,
         // which is what catches a chest becoming a double chest.
-        if (CONTAINER_MATERIALS[material] == false)
+        val known = CONTAINER_MATERIALS[material]
+        if (known == false)
             return null
 
         // getState(false) skips the snapshot copy and hands back the live block state
         val container = block.getState(false) as? Container
-        CONTAINER_MATERIALS.putIfAbsent(material, container != null)
+        if (known == null)
+            CONTAINER_MATERIALS[material] = container != null
 
         return container?.let { VanillaBacking(it.inventory) }
     }

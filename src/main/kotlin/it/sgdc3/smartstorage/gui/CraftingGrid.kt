@@ -120,9 +120,6 @@ internal class CraftingGrid(
      * Takes one of every ingredient out of the grid, and answers whether the whole recipe was paid for.
      */
     private fun consumeGrid(player: Player, matrix: Array<ItemStack>): Boolean {
-        val paid = ArrayList<ItemStack>(CRAFTING_GRID_SIZE)
-        val remainders = ArrayList<ItemStack>(CRAFTING_GRID_SIZE)
-
         for (slot in 0..<CRAFTING_GRID_SIZE) {
             val stack = matrix[slot]
             if (stack.isEmpty)
@@ -138,22 +135,21 @@ internal class CraftingGrid(
 
             // A refused write leaves that ingredient sitting in the grid, so the recipe has only been
             // half paid for — and collecting a whole output for half a recipe is how a crafting grid
-            // mints items. Put back what was already taken and let the craft simply not happen.
-            if (!inventory.setItem(SELF, slot, left)) {
-                paid.forEach { giveToPlayer(player, it) }
+            // mints items. Give up on the craft instead.
+            //
+            // What was already taken is deliberately *not* handed back, because undoing a consumption
+            // is not the inverse of doing it. An ingredient that left a crafting remainder behind — a
+            // bucket, most of all — has already been replaced by that remainder in its own slot, so
+            // returning the ingredient as well would create the bucket out of nothing. Losing what was
+            // consumed is the direction this addon errs in everywhere it has the choice.
+            if (!inventory.setItem(SELF, slot, left))
                 return false
-            }
 
-            paid += stack.clone().apply { amount = 1 }
-
-            // the slot could only keep one of the two, so the remainder has to go to the player — but
-            // only once the whole grid is paid, or a later refusal would refund an ingredient and hand
-            // over its remainder as well
+            // the slot could only keep one of the two, so hand the remainder over directly
             if (stack.amount > 1 && remainder != null)
-                remainders += ItemStack.of(remainder)
+                giveToPlayer(player, ItemStack.of(remainder))
         }
 
-        remainders.forEach { giveToPlayer(player, it) }
         return true
     }
 

@@ -452,9 +452,6 @@ pwsh -File tools/gen-hub-models.ps1
 The arm geometry, texture and per-face UV rotations are copied from the cable generator on purpose: a
 hub's arms have to meet a cable's without a seam, so the two must not be free to drift.
 
-`tools/gen-connector-models.ps1` is the superseded ancestor of this script, from when the connector was
-the only hub. It is kept only because there is nothing to recover it from; do not run it.
-
 ```bash
 pwsh -File tools/gen-block-textures.ps1
 ```

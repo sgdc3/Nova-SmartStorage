@@ -314,6 +314,13 @@ A **Barrel Controller** speaks for every barrel it can reach through *touching* 
 block of storage, which is the arrangement players build anyway. One item pipe or one Storage Connector
 against the controller then reaches the whole wall instead of one barrel.
 
+Touching means all twenty-six blocks around one — faces, edges and corners. A wall is something you
+build by eye, and by eye a barrel set kitty-corner to the next is part of it; requiring face contact made
+a diagonal step silently end the wall, which is a rule nobody can see from the outside. It also lets a
+wall turn a corner or step up a level without a filler barrel holding it together. The other side of
+that: two runs of barrels passing corner to corner are now one wall, and whichever controller scans
+first owns them both.
+
 Its menu lists the wall a barrel per row, with the same clicks a terminal entry takes, and the same
 search: the compass opens an anvil you type into and the list narrows as you go. The search is per
 player rather than shared, so two people looking at the same wall are not typing into each other's list.

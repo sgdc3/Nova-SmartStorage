@@ -73,6 +73,18 @@ private const val DEPOSIT_SLOTS = 1
 private val SHORTFALL = RateLimitedError()
 
 /**
+ * Every block that touches a cube: the six faces, the twelve edges and the eight corners.
+ *
+ * Built rather than written out because twenty-six triples typed by hand is twenty-six chances to leave
+ * one out, and the one left out would be a barrel that silently stops being part of the wall.
+ */
+private val TOUCHING_OFFSETS: List<Triple<Int, Int, Int>> = buildList {
+    for (dx in -1..1) for (dy in -1..1) for (dz in -1..1)
+        if (dx != 0 || dy != 0 || dz != 0)
+            add(Triple(dx, dy, dz))
+}
+
+/**
  * Speaks for every [StorageBarrel] it can reach, so that one pipe — or one [StorageConnector] — serves
  * a whole wall of them.
  *
@@ -145,7 +157,9 @@ class BarrelController(
      * beside it. See [closeTouchingItemFaces].
      */
     private suspend fun syncTouchingFaces(state: NetworkState) {
-        closeTouchingItemFaces(state, pos, itemHolder)
+        // not extractOnlyFromBelow: a wall's mouth is meant to be served by one pipe on whichever side
+        // is convenient, and sides that only accept would break that
+        restrictItemFaces(state, pos, itemHolder, extractOnlyFromBelow = false)
         touching.refresh(state, pos)
     }
 
@@ -210,11 +224,22 @@ class BarrelController(
     }
 
     /**
-     * Breadth-first through touching barrels, claiming each one on the way.
+     * Breadth-first through neighbouring barrels, claiming each one on the way.
+     *
+     * Neighbouring means all twenty-six blocks around one — faces, edges and corners — rather than the
+     * six faces. A wall is something a player builds by eye, and by eye a barrel set kitty-corner to the
+     * next is part of the same wall; requiring face contact made a diagonal step silently end it, which
+     * is a rule nobody can see from the outside. It also lets a wall turn a corner or step up a level
+     * without a filler barrel holding it together.
+     *
+     * The cost is four times the lookups per barrel, which is affordable because that is all they are:
+     * a map lookup and a chunk check, bounded by `max_barrels` and repeated every `rescan_ticks`.
      *
      * A barrel belongs to exactly one controller — see [StorageBarrel.claim] — so a second controller
      * built onto the same wall reaches nothing rather than presenting the same storage twice. Its menu
-     * says so, which is the only honest way for it to fail.
+     * says so, which is the only honest way for it to fail. Diagonals widen what "the same wall" means:
+     * two runs of barrels passing corner to corner are now one, and whichever controller scans first
+     * owns them both.
      *
      * The chunk check comes first for the same reason it does in [StorageConnector]: asking Bukkit
      * whether a chunk is loaded neither loads it nor allocates, while reading anything out of it would
@@ -235,11 +260,11 @@ class BarrelController(
         while (queue.isNotEmpty() && found.size < limit) {
             val current = queue.removeFirst()
 
-            for (face in CUBE_FACES) {
+            for ((dx, dy, dz) in TOUCHING_OFFSETS) {
                 if (found.size >= limit)
                     break
 
-                val next = current.advance(face)
+                val next = BlockPos(pos.world, current.x + dx, current.y + dy, current.z + dz)
                 if (!visited.add(next))
                     continue
                 if (!pos.world.isChunkLoaded(next.x shr 4, next.z shr 4))

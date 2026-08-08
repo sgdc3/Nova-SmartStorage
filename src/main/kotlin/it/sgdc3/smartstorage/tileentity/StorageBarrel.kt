@@ -421,7 +421,7 @@ class StorageBarrel(
      * them, so a chest set beside a barrel would otherwise fill it, every tick, for nobody.
      */
     private suspend fun syncTouchingFaces(state: NetworkState) {
-        closeTouchingItemFaces(state, pos, itemHolder)
+        restrictItemFaces(state, pos, itemHolder, extractOnlyFromBelow = true)
         touching.refresh(state, pos)
     }
 

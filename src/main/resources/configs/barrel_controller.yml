@@ -1,13 +1,14 @@
 # How many barrels one controller reaches.
 #
-# The controller walks outwards through barrels that touch each other, so this bounds the walk as well
-# as the number of item types it can expose. It is also the size of the inventory Nova's item network
-# sees, which Nova reads once when a network is built: changing it takes effect after a server restart.
+# The controller walks outwards through barrels that touch each other — corners and edges included, not
+# only faces — so this bounds the walk as well as the number of item types it can expose. It is also the
+# size of the inventory Nova's item network sees, which Nova reads once when a network is built:
+# changing it takes effect after a server restart.
 max_barrels: 64
 
 # Ticks between two searches for connected barrels.
 #
-# The search itself is a handful of map lookups per barrel and touches no block state, but there is no
-# event to hang it on — a barrel placed at the far end of a wall is not something the controller is
-# told about — so it has to be repeated. Anything under a second is imperceptible in practice.
+# The search is twenty-six map lookups per barrel and touches no block state, but there is no event to
+# hang it on — a barrel placed at the far end of a wall is not something the controller is told about —
+# so it has to be repeated. Anything under a second is imperceptible in practice.
 rescan_ticks: 20

@@ -483,6 +483,12 @@ class StorageBarrel(
      * rebuilt somewhere else with nothing on the floor in between, which is the whole reason to keep
      * thousands of one item in a block rather than in a chest.
      *
+     * **Nothing is ever dropped loose.** The contents leave on the barrel or they do not leave: a break
+     * that does not earn the block — the wrong tool, a cancelled drop, creative — takes what is inside
+     * with it, exactly as it does for any other machine with an inventory. Spilling the contents of a
+     * block that did not itself drop is the one behaviour this must not have, because it reads as the
+     * barrel being destroyed *and* looted.
+     *
      * Deliberately free of side effects on the barrel itself. Nova calls this from `BlockUtils.getDrops`
      * as well as from a real break, and that is a plain question — `BlockManager` exposes it to any
      * plugin wanting to know what a block would drop — so a barrel that emptied itself when asked would
@@ -492,19 +498,14 @@ class StorageBarrel(
     override fun getDrops(includeSelf: Boolean): List<ItemStack> {
         val drops = ArrayList(super.getDrops(includeSelf))
 
+        // `block.item` rather than the registry constant: it is the expression `TileEntity.getDrops`
+        // itself builds the stack from, so what is looked for here cannot drift from what was made.
+        // Absent means the barrel is not dropping at all, and then neither is anything it holds.
+        val self = drops.firstOrNull { it.novaItem == block.item } ?: return drops
+
         val (current, count, wasLocked) = StorageLock.withLock { Triple(type, amount, locked) }
         if (current == null && !wasLocked)
             return drops
-
-        val self = drops.firstOrNull { it.novaItem == STORAGE_BARREL.item }
-        if (self == null) {
-            // The barrel itself is not dropping — it was broken without the tool that earns it. The
-            // contents have nothing to ride on and would simply cease to exist, so they fall on the
-            // floor instead, which is the one outcome nobody can call a loss.
-            if (current != null && count > 0L)
-                drops += split(current, count)
-            return drops
-        }
 
         val carried = Compound()
         if (current != null)

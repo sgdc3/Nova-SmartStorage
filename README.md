@@ -286,9 +286,12 @@ wall down is a *move* rather than an emptying: it becomes a stack of barrels in 
 a floor covered in loose items, which is the whole reason to keep thousands of one thing in a block.
 
 Two full barrels never stack together, because a stack would hold one set of contents between them and
-hand it out once per barrel placed. Empty ones carry nothing and stack the way a block ought to. And a
-barrel broken without the pickaxe that earns it drops nothing to carry the items, so they fall on the
-floor instead — the one outcome nobody can call a loss.
+hand it out once per barrel placed. Empty ones carry nothing and stack the way a block ought to.
+
+**Nothing is ever dropped loose.** The contents leave on the barrel or they do not leave: a break that
+does not earn the block — the wrong tool, creative, a plugin cancelling the drop — takes what is inside
+with it, exactly as it does for any other machine with an inventory. A block that did not itself drop
+but spilled its contents on the floor would read as being destroyed *and* looted at once.
 
 A locked barrel wears a padlock stamped across the top of its front. That is the one thing about a barrel
 that had to become block state — a texture can only follow block state, and "locked" otherwise lives in

@@ -59,11 +59,11 @@ private val RESCAN_TICKS by BARREL_CONTROLLER.config.entry<Int>("rescan_ticks")
 private val EXPOSED_SLOTS = MAX_BARRELS
 
 /**
- * Drop-off slots in the controller's own menu. Three because that is how much free space the sidebar
- * has; one would empty on the next tick anyway, but a player shift-clicking a chest's worth across
- * would find it occupied every other click.
+ * The drop-off slot in the controller's own menu. One, beside the readout, rather than filling the
+ * sidebar's free corner: it empties into the wall on the next tick, so a second and a third would only
+ * ever hold something for the fraction of a second between two shift-clicks.
  */
-private const val DEPOSIT_SLOTS = 3
+private const val DEPOSIT_SLOTS = 1
 
 /**
  * Shared by every controller, for the same reason [StorageBarrel]'s is shared by every barrel.
@@ -502,12 +502,13 @@ class BarrelController(
         override val gui = listGui(
             "x x x x x x x s u",
             "x x x x x x x f d",
-            "x x x x x x x p p",
+            "x x x x x x x . .",
             "x x x x x x x p i"
         ) {
             's' by searchButton()
+            'f' by clearFilterButton()
             'i' by statusItem
-            // only on this gui: the search window's lower half is all list and has nowhere to put them
+            // only on this gui: the search window's lower half is all list and has nowhere to put it
             'p' by depositInventory.with(TerminalContent.depositBackground())
         }
 
@@ -532,7 +533,6 @@ class BarrelController(
             'x' by Markers.CONTENT_LIST_SLOT_HORIZONTAL
             'u' by scrollUpItem(line)
             'd' by scrollDownItem(line, maxLine)
-            'f' by clearFilterButton()
             extraIngredients()
             content by rows
         }
@@ -575,10 +575,13 @@ class BarrelController(
             val window = anvilWindow(player) {
                 // Nova's own search background, so the anvil stops looking like an anvil
                 title by DefaultGuiTextures.SEARCH.component
+                // Three rows, not four. Nova's search background draws three — the fourth fell into the
+                // gap below the panel and sat there unframed. The clear-filter button goes with it and
+                // is not missed: the anvil's own text field is the filter, in plain sight, and a button
+                // that reports what it says was only ever a second copy of it.
                 lowerGui by listGui(
                     "x x x x x x x x u",
                     "x x x x x x x x d",
-                    "x x x x x x x x f",
                     "x x x x x x x x b"
                 ) {
                     'b' by backButton()

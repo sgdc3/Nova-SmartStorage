@@ -187,13 +187,16 @@ $layouts = @(
         )
     }
     @{
-        # one row per screenful of the connected barrels, with the buttons in the last column
+        # One row per screenful of the connected barrels, with the buttons in the last two columns and
+        # the drop-off slots in the corner they leave free. Those are drawn as input slots, the same
+        # blue as the terminal's deposit row, because that is the whole job of the tint: an empty slot
+        # that takes what you shift-click has to be told apart from a panel that does nothing.
         name = 'barrel_controller'
         rows = @(
             'xxxxxxx..',
             'xxxxxxx..',
             'xxxxxxx..',
-            'xxxxxxx..'
+            'xxxxxxxi.'
         )
     }
 )

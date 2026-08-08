@@ -49,6 +49,18 @@ object Blocks {
      */
     private val DEVICE = Breakable(4.0, setOf(VanillaToolCategories.PICKAXE), VanillaToolTiers.STONE, true, Material.IRON_BLOCK)
 
+    /**
+     * The barrel's own, identical to [DEVICE] but for the one flag: it drops whatever it was broken
+     * with, bare hands included.
+     *
+     * Every other block here is worth the iron it is made of, so losing one to the wrong pickaxe is the
+     * ordinary cost of mining without the right tool. A barrel is not: it carries thousands of items in
+     * its own data — see [it.sgdc3.smartstorage.tileentity.StorageBarrel.getDrops] — and "wrong tool"
+     * would quietly destroy all of them along with the block. A pickaxe still mines it faster; it just
+     * no longer decides whether the contents survive.
+     */
+    private val BARREL = Breakable(4.0, setOf(VanillaToolCategories.PICKAXE), VanillaToolTiers.STONE, false, Material.IRON_BLOCK)
+
     val STORAGE_CABLE: NovaTileEntityBlock = tileEntity("storage_cable", ::StorageCable) {
         tickrate(0)
         behaviors(TileEntityLimited, TileEntityDrops, CABLE, BlockSounds(SoundGroup.METAL))
@@ -113,7 +125,7 @@ object Blocks {
      * three simple blocks pay for one.
      */
     val STORAGE_BARREL: NovaTileEntityBlock = tileEntity("storage_barrel", ::StorageBarrel) {
-        behaviors(TileEntityLimited, TileEntityDrops, TileEntityInteractive, DEVICE, BlockSounds(SoundGroup.METAL))
+        behaviors(TileEntityLimited, TileEntityDrops, TileEntityInteractive, BARREL, BlockSounds(SoundGroup.METAL))
         stateProperties(DefaultScopedBlockStateProperties.FACING_HORIZONTAL, ScopedBlockStateProperties.LOCKED)
         stateBacked(BackingStateCategory.NOTE_BLOCK, BackingStateCategory.MUSHROOM_BLOCK) {
             val locked = getPropertyValueOrThrow(BlockStateProperties.LOCKED)

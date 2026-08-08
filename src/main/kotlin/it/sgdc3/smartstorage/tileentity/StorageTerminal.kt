@@ -33,9 +33,9 @@ class StorageTerminal(
         private val filter = searchState()
         private val sortMode = sortState()
 
-        /** 8 columns x 5 rows in the terminal itself, 8 x 4 in the search window's lower gui */
+        /** 8 columns x 5 rows in the terminal itself, 8 x 3 in the search window's lower gui */
         private val content = contentProvider(player, filter, sortMode, columns = 8, visibleSlots = 40)
-        private val searchContent = contentProvider(player, filter, sortMode, columns = 8, visibleSlots = 32)
+        private val searchContent = contentProvider(player, filter, sortMode, columns = 8, visibleSlots = 24)
 
         override val gui = contentGui(
             content,
@@ -80,14 +80,15 @@ class StorageTerminal(
             val window = anvilWindow(player) {
                 // Nova's own search background, so the anvil stops looking like an anvil
                 title by DefaultGuiTextures.SEARCH.component
+                // Three rows: Nova's search background draws three, and a fourth fell into the gap below
+                // the panel and sat there unframed. The clear-filter button goes with it — the anvil's
+                // own text field is the filter, and a button reporting what it says was a second copy.
                 lowerGui by contentGui(
                     searchContent,
                     "x x x x x x x x u",
                     "x x x x x x x x d",
-                    "x x x x x x x x f",
                     "x x x x x x x x b"
                 ) {
-                    'f' by clearFilterButton(filter)
                     'b' by backButton()
                 }
                 text.subscribe(filter::set)

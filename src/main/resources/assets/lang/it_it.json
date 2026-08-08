@@ -21,6 +21,7 @@
   "item.smartstorage.storage_cell_4k": "Cella 4k",
   "item.smartstorage.storage_cell_16k": "Cella 16k",
   "item.smartstorage.storage_cell_64k": "Cella 64k",
+  "item.smartstorage.storage_barrel.lore.locked": "Bloccato su questo oggetto",
   "item.smartstorage.storage_cell.lore.items": "%s / %s oggetti",
   "item.smartstorage.storage_cell.lore.types": "%s / %s tipi",
   "item.smartstorage.storage_cell.lore.more": "… e altri %s",

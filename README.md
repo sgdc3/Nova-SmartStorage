@@ -280,11 +280,22 @@ themselves, which take the same clicks as a terminal entry. An empty barrel take
 offered to it and forgets it again once it runs dry; **lock** it and it keeps that item forever, which is
 how you keep one barrel for iron whether or not there is any iron in it right now.
 
+**A barrel travels full.** Break one and its contents are written onto the item it drops as — the item
+says what it is holding, and placing it puts the barrel back exactly as it was, lock and all. Taking a
+wall down is a *move* rather than an emptying: it becomes a stack of barrels in your inventory instead of
+a floor covered in loose items, which is the whole reason to keep thousands of one thing in a block.
+
+Two full barrels never stack together, because a stack would hold one set of contents between them and
+hand it out once per barrel placed. Empty ones carry nothing and stack the way a block ought to. And a
+barrel broken without the pickaxe that earns it drops nothing to carry the items, so they fall on the
+floor instead — the one outcome nobody can call a loss.
+
 A locked barrel wears a padlock stamped across the top of its front. That is the one thing about a barrel
 that had to become block state — a texture can only follow block state, and "locked" otherwise lives in
 the tile entity — so the barrel carries a `locked` property alongside its facing and the tile entity
 pushes it out from its tick. Doing it from the tick rather than from the click also means a barrel whose
-data and block state ever drift apart corrects itself without anyone touching it.
+data and block state ever drift apart — placed from an item, most of all — corrects itself without anyone
+touching it.
 
 The badge sits at the top because that is the only strip of the face the display entities leave free, and
 the item icon is sized to end exactly where the padlock does. The two textures are otherwise identical:
@@ -319,13 +330,18 @@ speaks for it produce the same storage identity and the network keeps one of the
 To Nova a barrel and a controller are ordinary **item network** end points, each with a single `BUFFER`
 container, so item cables, hoppers and machines reach them with no integration on either side.
 
-With one rule on top: **a barrel never feeds another barrel**, and never feeds the controller that speaks
-for it. Nova connects two end points that *touch* directly, with no cable in between — which is exactly
-how a wall of barrels is built, and how it has to be built, since that is how a controller finds them.
-Without the rule the item network looks at a full barrel and an empty one beside it and does the obvious
-thing: moves a stack across, every tick, forever. A wall has to be inert. The cost is that piping one
-barrel into another does not work either; the distributor asks about a *pair*, not about a path, so
-"adjacent, but with a cable" is not something that can be expressed here.
+With one rule on top: **neither trades with anything it is merely touching.** Nova connects two end
+points that *touch* directly, with no cable in between — which is exactly how a wall of barrels is built,
+and how it has to be built, since that is how a controller finds them. Left alone the item network looks
+at a full barrel and an empty chest beside it and does the obvious thing: moves a stack across, every
+tick, forever, in whichever direction the numbers happen to point. Nobody placed either block asking for
+that.
+
+A barrel is **passive storage**. It moves items when a pipe, a connector or a player asks it to, and at
+no other time. The cost is that a hopper or a machine set straight against a barrel no longer feeds it —
+one segment of cable between them does. The distributor asks about a *pair*, not about a path, so
+"adjacent, but with a cable" cannot be expressed here; the choice is only which way to be wrong, and a
+barrel that quietly empties itself into the chest next door is the worse one.
 
 To this addon's own storage network they are deliberately nothing at all. Neither carries a
 `StorageHolder`, so a storage cable will not bridge to one and a controller will never count it as a

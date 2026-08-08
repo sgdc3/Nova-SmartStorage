@@ -42,6 +42,7 @@ import xyz.xenondevs.nova.world.block.tileentity.NetworkedTileEntity
 import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
 import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkConnectionType
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.inventory.NetworkedInventory
+import xyz.xenondevs.nova.world.format.NetworkState
 import xyz.xenondevs.nova.world.format.WorldDataManager
 import java.util.UUID
 import kotlin.math.max
@@ -97,12 +98,23 @@ class BarrelController(
     private val networkedInventory = ControllerInventory()
     private val itemHolder = storedItemHolder(networkedInventory to NetworkConnectionType.BUFFER)
 
+    /**
+     * What this controller is touching, so that it can decline all of it. A controller is the wall's
+     * mouth, and the wall is passive: it speaks to a pipe, not to whatever happens to be beside it.
+     * See [TouchingInventories].
+     */
+    private val touching = TouchingInventories()
+
     private val entries: MutableProvider<List<Entry>> = mutableProvider(emptyList())
 
     override fun handleEnable() {
         super.handleEnable()
         rescan()
     }
+
+    override suspend fun handleNetworkLoaded(state: NetworkState) = touching.refresh(state, pos)
+
+    override suspend fun handleNetworkUpdate(state: NetworkState) = touching.refresh(state, pos)
 
     override fun handleTick() {
         // No controller powers this one — it is not on the storage network at all — so its screen goes
@@ -392,6 +404,9 @@ class BarrelController(
          */
         override fun canExchangeItemsWith(other: NetworkedInventory): Boolean {
             if (other === this)
+                return false
+
+            if (other in touching)
                 return false
 
             return when (other) {

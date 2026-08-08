@@ -1,5 +1,6 @@
 package it.sgdc3.smartstorage.tileentity
 
+import it.sgdc3.smartstorage.SmartStorage
 import it.sgdc3.smartstorage.gui.ClickableItem
 import it.sgdc3.smartstorage.registry.BlockStateProperties
 import it.sgdc3.smartstorage.registry.Blocks.STORAGE_BARREL
@@ -26,8 +27,13 @@ import xyz.xenondevs.nova.config.entry
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
 import xyz.xenondevs.nova.context.intention.BlockInteract
+import xyz.xenondevs.nova.context.intention.BlockPlace
 import xyz.xenondevs.nova.util.addItemCorrectly
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
+import xyz.xenondevs.nova.util.item.ItemUtils
+import xyz.xenondevs.nova.util.item.novaItem
+import xyz.xenondevs.nova.util.item.retrieveData
+import xyz.xenondevs.nova.util.item.storeData
 import xyz.xenondevs.nova.util.playClickSound
 import xyz.xenondevs.nova.world.BlockPos
 import xyz.xenondevs.nova.world.InteractionResult
@@ -37,6 +43,7 @@ import xyz.xenondevs.nova.world.block.tileentity.NetworkedTileEntity
 import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
 import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkConnectionType
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.inventory.NetworkedInventory
+import xyz.xenondevs.nova.world.format.NetworkState
 import xyz.xenondevs.nova.world.item.DefaultGuiItems
 import java.util.UUID
 import kotlin.concurrent.withLock
@@ -55,6 +62,11 @@ private const val NOMINAL_STACK_SIZE = 64
  * Shared by every barrel, so a wall of them cannot multiply one bug into a flood of identical lines.
  */
 private val SHORTFALL = RateLimitedError()
+
+/**
+ * Where a broken barrel's contents ride on the item it drops as.
+ */
+private const val CONTENTS_KEY = "barrel"
 
 /**
  * A barrel that holds one kind of item, a great many of them, and says on its front what and how many.
@@ -133,6 +145,11 @@ class StorageBarrel(
 
     private val networkedInventory = BarrelInventory()
     private val itemHolder = storedItemHolder(networkedInventory to NetworkConnectionType.BUFFER)
+
+    /**
+     * What this barrel is touching, so that it can decline all of it. See [TouchingInventories].
+     */
+    private val touching = TouchingInventories()
 
     private var face: BarrelFace? = null
 
@@ -328,7 +345,16 @@ class StorageBarrel(
     }
 
     /**
-     * Hands back whatever no longer fits after the capacity shrank. Main thread only — it spawns items.
+     * Hands back whatever no longer fits. Main thread only — it spawns items.
+     *
+     * Taking a Storage Upgrade out is the obvious way to end up over capacity, and it subscribes to
+     * exactly that. Placing one down is the other: upgrades drop as items of their own while the contents
+     * ride on the barrel, so a 256-stack barrel put back up bare is a 32-stack barrel holding eight times
+     * what it should. Running this from the tick as well makes the invariant hold however it was broken,
+     * including by a save older than the rule, rather than only for the cause anyone thought of first.
+     *
+     * Costs one comparison when there is nothing to do, and only runs on a tick where the contents
+     * changed.
      */
     private fun ejectOverflow() {
         if (!isEnabled)
@@ -378,6 +404,10 @@ class StorageBarrel(
         dirty = true
     }
 
+    override suspend fun handleNetworkLoaded(state: NetworkState) = touching.refresh(state, pos)
+
+    override suspend fun handleNetworkUpdate(state: NetworkState) = touching.refresh(state, pos)
+
     override fun handleTick() {
         drainDeposit()
 
@@ -385,6 +415,7 @@ class StorageBarrel(
             return
         dirty = false
 
+        ejectOverflow()
         applyLockedState()
         refreshFace()
         menuContainer.forEachMenu(StorageBarrelMenu::update)
@@ -414,47 +445,110 @@ class StorageBarrel(
     override fun handleBreak(ctx: Context<BlockBreak>) {
         face?.clear()
         face = null
-        // Before super, which is what tears the tile entity down: the drops were already collected by
-        // the time anything here runs — Nova asks a block what it drops and only then breaks it — so
-        // this is the first moment the count is safe to clear and the last one it can still be written.
-        clearContents()
         super.handleBreak(ctx)
     }
 
     /**
-     * Adds the contents to whatever the block itself drops.
+     * Restores a barrel placed from an item that was carrying contents. See [getDrops].
      *
-     * Deliberately does *not* empty the barrel, which is what [handleBreak] is for. Nova calls this from
-     * `BlockUtils.getDrops` as well as from a real break, and that is a plain question — `BlockManager`
-     * exposes it to any plugin wanting to know what a block would drop. A barrel that emptied itself
-     * whenever it was asked would lose everything to something merely looking at it.
+     * Nothing here is conditional on the barrel being empty, because a freshly placed one always is: a
+     * tile entity is built from its own stored data, and a barrel that has never been placed has none.
+     */
+    override fun handlePlace(ctx: Context<BlockPlace>) {
+        super.handlePlace(ctx)
+
+        val carried = ctx[BlockPlace.BLOCK_ITEM_STACK]
+            ?.retrieveData<Compound>(SmartStorage, CONTENTS_KEY)
+            ?: return
+
+        val carriedStack: ItemStack? = carried["type"]
+        val stored = ItemType.of(carriedStack)
+        val count: Long = carried["amount"] ?: 0L
+
+        StorageLock.withLock {
+            setType(stored, stored?.maxStackSize ?: NOMINAL_STACK_SIZE)
+            setAmount(if (stored == null) 0L else max(0L, count))
+        }
+
+        locked = carried["locked"] ?: false
+        // the padlock and the front are block state, which the next tick is what puts there
+        dirty = true
+    }
+
+    /**
+     * The barrel travels full.
+     *
+     * Everything it holds is written onto the item it drops as, so that taking one down and putting it
+     * back up is a *move* rather than an emptying. A wall can be dismantled into a stack of barrels and
+     * rebuilt somewhere else with nothing on the floor in between, which is the whole reason to keep
+     * thousands of one item in a block rather than in a chest.
+     *
+     * Deliberately free of side effects on the barrel itself. Nova calls this from `BlockUtils.getDrops`
+     * as well as from a real break, and that is a plain question — `BlockManager` exposes it to any
+     * plugin wanting to know what a block would drop — so a barrel that emptied itself when asked would
+     * lose everything to something merely looking at it. Nothing here needs to: the contents are copied
+     * onto a fresh item, and the barrel they were copied from is about to stop existing.
      */
     override fun getDrops(includeSelf: Boolean): List<ItemStack> {
         val drops = ArrayList(super.getDrops(includeSelf))
 
-        StorageLock.withLock {
-            val current = type
-            if (current != null && amount > 0L)
-                drops += split(current, amount)
+        val (current, count, wasLocked) = StorageLock.withLock { Triple(type, amount, locked) }
+        if (current == null && !wasLocked)
+            return drops
+
+        val self = drops.firstOrNull { it.novaItem == STORAGE_BARREL.item }
+        if (self == null) {
+            // The barrel itself is not dropping — it was broken without the tool that earns it. The
+            // contents have nothing to ride on and would simply cease to exist, so they fall on the
+            // floor instead, which is the one outcome nobody can call a loss.
+            if (current != null && count > 0L)
+                drops += split(current, count)
+            return drops
         }
+
+        val carried = Compound()
+        if (current != null)
+            carried["type"] = current.stack
+        carried["amount"] = count
+        carried["locked"] = wasLocked
+        // Two barrels holding the same thing would otherwise be the same item, and a stack of them would
+        // hold one set of contents between them while handing it out once per barrel placed. Carrying
+        // the barrel's own identity keeps every full one distinct without touching the stack size, so an
+        // empty barrel — which carries none of this — still stacks the way a block ought to.
+        carried["source"] = uuid.toString()
+
+        self.storeData(SmartStorage, CONTENTS_KEY, carried)
+        describe(self, current, count, wasLocked)
 
         return drops
     }
 
     /**
-     * Empties the barrel once it is genuinely being taken out of the world.
+     * Writes what a dropped barrel holds onto the item, since an item has no front to print it on.
      *
-     * It has to happen, and it has to happen here: Nova collects the drops before the break and nothing
-     * afterwards would clear the count, so a second reader — the item that gets placed back down, most
-     * of all — would find the contents still listed and hand the same items out again.
+     * A translatable component rather than a rendered string: the lore is baked once, here, but the
+     * client is what resolves it, so a barrel picked up on one language's client and dropped for another
+     * reads correctly for both. Baking it is honest — an item's contents cannot change while it is an
+     * item.
      */
-    private fun clearContents() {
-        StorageLock.withLock {
-            if (amount > 0L || type != null) {
-                setAmount(0L)
-                setType(null, NOMINAL_STACK_SIZE)
-            }
+    private fun describe(itemStack: ItemStack, type: ItemType?, count: Long, locked: Boolean) {
+        val lore = ArrayList<Component>()
+
+        if (type != null) {
+            lore += Component.text()
+                .color(NamedTextColor.GRAY)
+                .append(Component.text("$count× "))
+                .append(ItemUtils.getName(type.stack))
+                .build()
+                .withoutPreFormatting()
         }
+
+        if (locked) {
+            lore += Component.translatable("item.smartstorage.storage_barrel.lore.locked", NamedTextColor.DARK_GRAY)
+                .withoutPreFormatting()
+        }
+
+        itemStack.lore(lore)
     }
 
     private fun refreshFace() {
@@ -628,25 +722,37 @@ class StorageBarrel(
         }
 
         /**
-         * A barrel never feeds another barrel, and never feeds the controller that speaks for it.
+         * A barrel trades with nothing it is merely touching.
          *
          * Nova connects two end points that *touch* directly, with no cable in between — which is
          * exactly how a wall of barrels is built, and how it is meant to be built, since that is how a
-         * controller finds them. Without this rule the item network would look at a full barrel and an
-         * empty one beside it and do the obvious thing: move a stack across, every tick, forever. The
-         * wall has to be inert.
+         * controller finds them. Left alone the item network looks at a full barrel and an empty chest
+         * beside it and does the obvious thing: moves a stack across, every tick, forever, in whichever
+         * direction the numbers happen to point. Nobody placed either block asking for that.
          *
-         * A controller is the same storage seen a second time, so that pairing is refused for a
-         * different reason and would be even worse: it would shuttle a barrel's contents into itself.
+         * This started as the narrower rule — no barrel feeds another barrel — because two barrels was
+         * the pairing anyone had noticed. A chest on the next block is the same pathology with a
+         * different block on the other side of it, and so is a hopper, and so is a machine. A barrel is
+         * passive storage: it moves items when a pipe, a connector or a player asks it to, and at no
+         * other time. See [TouchingInventories].
          *
-         * The cost is that piping one barrel into another does not work either. That is a build nobody
-         * makes, and no way of expressing "adjacent, but with a cable" exists here — the distributor
-         * asks this question about a pair, not about a path.
+         * A controller is kept out separately, because it is not merely adjacent — it is the same
+         * storage seen a second time, and a controller reached through a cable would still be shuttling
+         * a barrel's contents into itself.
+         *
+         * The cost is that a hopper or a machine set straight against a barrel no longer feeds it; one
+         * segment of cable between them does. No way of expressing "adjacent, but with a cable" exists
+         * here — the distributor asks this question about a pair, not about a path — so the choice is
+         * which way to be wrong, and a barrel that quietly empties itself into the chest next door is
+         * the worse one.
          */
         override fun canExchangeItemsWith(other: NetworkedInventory): Boolean = when {
             other === this -> false
             other is BarrelInventory -> false
             other is BarrelController.ControllerInventory -> !other.covers(barrel)
+            // and nothing else it is merely pressed against either: a barrel beside a chest is the same
+            // shuttle as a barrel beside a barrel, and a barrel is passive storage in both directions
+            other in touching -> false
             else -> true
         }
 

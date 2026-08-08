@@ -1,6 +1,7 @@
 package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.gui.ClickableItem
+import it.sgdc3.smartstorage.gui.TerminalContent
 import it.sgdc3.smartstorage.registry.Blocks.BARREL_CONTROLLER
 import it.sgdc3.smartstorage.registry.GuiTextures
 import it.sgdc3.smartstorage.storage.ItemType
@@ -20,6 +21,7 @@ import xyz.xenondevs.invui.dsl.IngredientsDsl
 import xyz.xenondevs.invui.dsl.anvilWindow
 import xyz.xenondevs.invui.dsl.item
 import xyz.xenondevs.invui.dsl.scrollItemsGui
+import xyz.xenondevs.invui.dsl.with
 import xyz.xenondevs.invui.gui.Markers
 import xyz.xenondevs.invui.item.Item
 import xyz.xenondevs.invui.item.ItemBuilder
@@ -55,6 +57,13 @@ private val RESCAN_TICKS by BARREL_CONTROLLER.config.entry<Int>("rescan_ticks")
  * One barrel per exposed slot, so the item network sees the wall rather than the block it is wired to.
  */
 private val EXPOSED_SLOTS = MAX_BARRELS
+
+/**
+ * Drop-off slots in the controller's own menu. Three because that is how much free space the sidebar
+ * has; one would empty on the next tick anyway, but a player shift-clicking a chest's worth across
+ * would find it occupied every other click.
+ */
+private const val DEPOSIT_SLOTS = 3
 
 /**
  * Shared by every controller, for the same reason [StorageBarrel]'s is shared by every barrel.
@@ -105,6 +114,19 @@ class BarrelController(
      */
     private val touching = TouchingInventories()
 
+    /**
+     * Drop-off slots, pushed into the wall on the next tick.
+     *
+     * A real inventory rather than a clickable, and that is the whole point of it: shift-clicking out of
+     * the player inventory is not a click on anything the menu drew, it is InvUI looking for somewhere in
+     * the window to *put* a stack. With nothing but items in the gui there was nowhere, so the controller
+     * was the one screen in the addon that could only be filled one cursor-load at a time — the terminals
+     * and the barrel's own menu have had one of these all along.
+     *
+     * Whatever the wall will not take stays sitting in the slot rather than vanishing.
+     */
+    private val depositInventory = storedInventory("deposit", DEPOSIT_SLOTS)
+
     private val entries: MutableProvider<List<Entry>> = mutableProvider(emptyList())
 
     override fun handleEnable() {
@@ -117,6 +139,8 @@ class BarrelController(
     override suspend fun handleNetworkUpdate(state: NetworkState) = touching.refresh(state, pos)
 
     override fun handleTick() {
+        drainDeposit()
+
         // No controller powers this one — it is not on the storage network at all — so its screen goes
         // dark when it reaches no barrels, which is the same statement about itself that every other
         // device's lights make: "I am doing something".
@@ -299,6 +323,39 @@ class BarrelController(
 
     //</editor-fold>
 
+    /**
+     * Pushes whatever is sitting in the drop-off slots into the wall.
+     *
+     * Modelled on [AbstractTerminal]'s, including the rollback: [insert] has already committed the items
+     * to the barrels by the time the slot is written, and the slot can refuse the write, so taking back
+     * exactly what went in is the only way to stop them existing in the wall and in the slot at once.
+     *
+     * Note that [insert] answers with what it *stored*, the opposite of what a storage network's returns.
+     */
+    private fun drainDeposit() {
+        // most ticks there is nothing here, and this runs per controller per tick — getUnsafeItem
+        // because the guard only needs to look at the slots, not own a copy of them
+        if ((0..<depositInventory.size).none { depositInventory.getUnsafeItem(it)?.isEmpty == false })
+            return
+
+        var moved = false
+        for (slot in 0..<depositInventory.size) {
+            val stack = depositInventory.getItem(slot) ?: continue
+            val type = ItemType.of(stack) ?: continue
+
+            val stored = insert(type, stack.amount.toLong()).toInt()
+            if (stored <= 0)
+                continue
+
+            val left = stack.amount - stored
+            val updated = if (left <= 0) null else stack.clone().apply { amount = left }
+            if (depositInventory.setItem(SELF_UPDATE_REASON, slot, updated)) moved = true else extract(type, stored.toLong())
+        }
+
+        if (moved)
+            refreshEntries()
+    }
+
     private fun refreshEntries() {
         val next = barrels.map { Entry(it, it.storedType, it.storedAmount, it.capacity) }
 
@@ -445,11 +502,13 @@ class BarrelController(
         override val gui = listGui(
             "x x x x x x x s u",
             "x x x x x x x f d",
-            "x x x x x x x . .",
-            "x x x x x x x . i"
+            "x x x x x x x p p",
+            "x x x x x x x p i"
         ) {
             's' by searchButton()
             'i' by statusItem
+            // only on this gui: the search window's lower half is all list and has nowhere to put them
+            'p' by depositInventory.with(TerminalContent.depositBackground())
         }
 
         init {

@@ -31,11 +31,22 @@ private const val LABEL_DEPTH = 0.535
  *
  * The item is not centred and not as large as it could be, and that is deliberate: the top strip of the
  * face has to stay clear, because that is where a locked barrel's padlock is stamped on the texture and
- * a display entity floating in front of it would hide it. At this scale the item reaches the fifth pixel
- * row from the top, which is exactly where the padlock ends.
+ * a display entity floating in front of it would hide it.
+ *
+ * ## Why the gap between them is what it is
+ *
+ * A sprite that fills its 16×16 was landing on the digits. The item's own box is [ITEM_SCALE] tall and
+ * centred on its anchor, so its lower edge reaches 0.225 below this figure — and an item whose artwork
+ * runs to the edge of its sprite fills that box, while one drawn with padding only looked as though
+ * there were room to spare.
+ *
+ * The clearance is taken from both ends because there is almost none at the top. The padlock is stamped
+ * across rows 0-4 of the texture, so its lower edge is 0.1875 above the middle of the block, and the item
+ * now reaches 0.185 — half a pixel short of it, and there is no more to take. The rest comes from
+ * dropping the count, which has the whole lower band to sit on.
  */
-private const val ITEM_HEIGHT = -0.07
-private const val LABEL_HEIGHT = -0.32
+private const val ITEM_HEIGHT = -0.04
+private const val LABEL_HEIGHT = -0.37
 
 private const val ITEM_SCALE = 0.45f
 private const val LABEL_SCALE = 0.5f

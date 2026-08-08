@@ -315,6 +315,12 @@ Its menu lists the wall a barrel per row, with the same clicks a terminal entry 
 search: the compass opens an anvil you type into and the list narrows as you go. The search is per
 player rather than shared, so two people looking at the same wall are not typing into each other's list.
 
+Beside the list are **drop-off slots**, as in the terminals: shift-click out of your inventory and it
+lands there, and the next tick pushes it into the wall. Barrels already holding that item are filled
+first — including one locked onto it and then emptied, which is precisely the barrel you meant — so
+pushing cobblestone at a sorted wall does not scatter it into whichever barrel happened to be free.
+Whatever the wall will not take stays in the slot rather than vanishing.
+
 A barrel belongs to **exactly one** controller, first come first served, and the claim heals itself when
 a controller is broken, unloaded or no longer within reach. That is not tidiness: two things presenting
 the same barrel as separate storage would each promise what only one of them can deliver, and Nova's item

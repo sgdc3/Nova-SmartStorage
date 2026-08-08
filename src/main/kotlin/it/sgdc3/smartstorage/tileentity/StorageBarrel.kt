@@ -35,12 +35,14 @@ import xyz.xenondevs.nova.util.item.novaItem
 import xyz.xenondevs.nova.util.item.retrieveData
 import xyz.xenondevs.nova.util.item.storeData
 import xyz.xenondevs.nova.util.playClickSound
+import xyz.xenondevs.nova.util.serverTick
 import xyz.xenondevs.nova.world.BlockPos
 import xyz.xenondevs.nova.world.InteractionResult
 import xyz.xenondevs.nova.world.block.state.NovaBlockState
 import xyz.xenondevs.nova.world.block.state.property.DefaultBlockStateProperties
 import xyz.xenondevs.nova.world.block.tileentity.NetworkedTileEntity
 import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
+import xyz.xenondevs.nova.world.block.tileentity.network.NetworkManager
 import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkConnectionType
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.inventory.NetworkedInventory
 import xyz.xenondevs.nova.world.format.NetworkState
@@ -67,6 +69,11 @@ private val SHORTFALL = RateLimitedError()
  * Where a broken barrel's contents ride on the item it drops as.
  */
 private const val CONTENTS_KEY = "barrel"
+
+/**
+ * Ticks between two looks at what is pressed against this barrel. See [TouchingInventories].
+ */
+private const val TOUCH_RESCAN_TICKS = 20
 
 /**
  * A barrel that holds one kind of item, a great many of them, and says on its front what and how many.
@@ -404,12 +411,28 @@ class StorageBarrel(
         dirty = true
     }
 
-    override suspend fun handleNetworkLoaded(state: NetworkState) = touching.refresh(state, pos)
+    override suspend fun handleNetworkLoaded(state: NetworkState) = syncTouchingFaces(state)
 
-    override suspend fun handleNetworkUpdate(state: NetworkState) = touching.refresh(state, pos)
+    override suspend fun handleNetworkUpdate(state: NetworkState) = syncTouchingFaces(state)
+
+    /**
+     * A barrel is passive storage: it moves items when a pipe, a connector or a player asks it to, and
+     * at no other time. Nova joins two end points that *touch* into one network with no cable between
+     * them, so a chest set beside a barrel would otherwise fill it, every tick, for nobody.
+     */
+    private suspend fun syncTouchingFaces(state: NetworkState) {
+        closeTouchingItemFaces(state, pos, itemHolder)
+        touching.refresh(state, pos)
+    }
 
     override fun handleTick() {
         drainDeposit()
+
+        // On a timer rather than only when Nova says the networks moved, and it has to be: closing a
+        // face is what stops the chest beside this barrel from filling it, and a closed face no longer
+        // receives the update that would say the chest is gone. See closeTouchingItemFaces.
+        if (serverTick % TOUCH_RESCAN_TICKS == 0)
+            NetworkManager.queueWrite(pos.chunkPos, ::syncTouchingFaces)
 
         if (!dirty)
             return

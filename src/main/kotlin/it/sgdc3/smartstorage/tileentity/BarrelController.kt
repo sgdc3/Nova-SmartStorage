@@ -5,6 +5,7 @@ import it.sgdc3.smartstorage.gui.TerminalContent
 import it.sgdc3.smartstorage.registry.Blocks.BARREL_CONTROLLER
 import it.sgdc3.smartstorage.registry.GuiTextures
 import it.sgdc3.smartstorage.storage.ItemType
+import it.sgdc3.smartstorage.storage.SortMode
 import it.sgdc3.smartstorage.util.RateLimitedError
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -42,6 +43,7 @@ import xyz.xenondevs.nova.world.BlockPos
 import xyz.xenondevs.nova.world.block.state.NovaBlockState
 import xyz.xenondevs.nova.world.block.tileentity.NetworkedTileEntity
 import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
+import xyz.xenondevs.nova.world.block.tileentity.network.NetworkManager
 import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkConnectionType
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.inventory.NetworkedInventory
 import xyz.xenondevs.nova.world.format.NetworkState
@@ -134,12 +136,25 @@ class BarrelController(
         rescan()
     }
 
-    override suspend fun handleNetworkLoaded(state: NetworkState) = touching.refresh(state, pos)
+    override suspend fun handleNetworkLoaded(state: NetworkState) = syncTouchingFaces(state)
 
-    override suspend fun handleNetworkUpdate(state: NetworkState) = touching.refresh(state, pos)
+    override suspend fun handleNetworkUpdate(state: NetworkState) = syncTouchingFaces(state)
+
+    /**
+     * The wall's mouth is as passive as the wall: it speaks to a pipe, not to whatever happens to be
+     * beside it. See [closeTouchingItemFaces].
+     */
+    private suspend fun syncTouchingFaces(state: NetworkState) {
+        closeTouchingItemFaces(state, pos, itemHolder)
+        touching.refresh(state, pos)
+    }
 
     override fun handleTick() {
         drainDeposit()
+
+        // on a timer as well as on network updates, for the reason given in StorageBarrel.handleTick
+        if (serverTick % max(1, RESCAN_TICKS) == 1)
+            NetworkManager.queueWrite(pos.chunkPos, ::syncTouchingFaces)
 
         // No controller powers this one — it is not on the storage network at all — so its screen goes
         // dark when it reaches no barrels, which is the same statement about itself that every other
@@ -486,8 +501,9 @@ class BarrelController(
 
         private val statusItem = ClickableItem({ statusIcon() })
         private val filter: MutableProvider<String> = mutableProvider("")
+        private val sortMode = TerminalContent.sortState()
 
-        private val rows: Provider<List<Item>> = combinedProvider(entries, filter) { list, text ->
+        private val rows: Provider<List<Item>> = combinedProvider(entries, filter, sortMode) { list, text, mode ->
             // Rendering an item's name and flattening it to plain text is the expensive part, so it is
             // only done when there is something to match against — a wall nobody is searching costs
             // nothing more than it did before.
@@ -496,17 +512,40 @@ class BarrelController(
                 ItemUtils.getName(type.stack).toPlainText(player).contains(text, ignoreCase = true)
             }
 
-            matching.mapTo(ArrayList(matching.size)) { rowItem(it) }
+            sorted(matching, mode).mapTo(ArrayList(matching.size)) { rowItem(it) }
+        }
+
+        /**
+         * The wall in the order the player asked for, with the empty barrels always last.
+         *
+         * They sort to the end rather than by their (absent) name or their zero count because an empty
+         * barrel is not a small entry, it is a place to put something — and a list that opens with a
+         * screenful of them buries what the wall actually holds.
+         *
+         * Sorting by name renders one name per barrel, which the search deliberately avoids doing unless
+         * it has to. It is affordable here for the same reason the scan is: a wall is at most
+         * `max_barrels` rows, not a whole network's worth of item types.
+         */
+        private fun sorted(entries: List<Entry>, mode: SortMode): List<Entry> {
+            val comparator = when (mode) {
+                SortMode.AMOUNT -> compareByDescending<Entry> { it.amount }
+                SortMode.NAME -> compareBy { entry ->
+                    entry.type?.let { ItemUtils.getName(it.stack).toPlainText(player) } ?: ""
+                }
+            }
+
+            return entries.sortedWith(compareBy<Entry> { it.type == null }.then(comparator))
         }
 
         override val gui = listGui(
             "x x x x x x x s u",
             "x x x x x x x f d",
-            "x x x x x x x . .",
+            "x x x x x x x o .",
             "x x x x x x x p i"
         ) {
             's' by searchButton()
             'f' by clearFilterButton()
+            'o' by sortButton()
             'i' by statusItem
             // only on this gui: the search window's lower half is all list and has nowhere to put it
             'p' by depositInventory.with(TerminalContent.depositBackground())
@@ -549,6 +588,25 @@ class BarrelController(
             }
         }
 
+        /**
+         * The same button the terminals have, written out here rather than borrowed: theirs is an
+         * instance method of [TerminalContent], which exists to index a storage network, and a barrel
+         * wall is not on one. Six lines is cheaper than that dependency.
+         */
+        private fun sortButton(): Item = item {
+            itemProvider by sortMode.map { mode ->
+                ItemBuilder(Material.HOPPER).setName(
+                    Component.translatable(mode.localizationKey, NamedTextColor.GRAY).withoutPreFormatting()
+                )
+            }
+            onClick {
+                if (clickType.isLeftClick) {
+                    sortMode.set(sortMode.get().next())
+                    player.playClickSound()
+                }
+            }
+        }
+
         private fun clearFilterButton(): Item = item {
             itemProvider by filter.map { text ->
                 ItemBuilder(Material.NAME_TAG).setName(
@@ -575,15 +633,17 @@ class BarrelController(
             val window = anvilWindow(player) {
                 // Nova's own search background, so the anvil stops looking like an anvil
                 title by DefaultGuiTextures.SEARCH.component
-                // Three rows, not four. Nova's search background draws three — the fourth fell into the
-                // gap below the panel and sat there unframed. The clear-filter button goes with it and
-                // is not missed: the anvil's own text field is the filter, in plain sight, and a button
-                // that reports what it says was only ever a second copy of it.
+                // Four rows, and not by choice: InvUI's split windows require the lower gui to be
+                // exactly 9x4, because it *is* the player inventory — three rows and the hotbar. The
+                // hotbar row is drawn detached from the panel above it, which is vanilla's doing and
+                // not something a background can close up.
                 lowerGui by listGui(
                     "x x x x x x x x u",
                     "x x x x x x x x d",
+                    "x x x x x x x x f",
                     "x x x x x x x x b"
                 ) {
+                    'f' by clearFilterButton()
                     'b' by backButton()
                 }
                 text.subscribe(filter::set)

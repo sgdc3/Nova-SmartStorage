@@ -3,6 +3,8 @@ package it.sgdc3.smartstorage.tileentity
 import xyz.xenondevs.nova.util.CUBE_FACES
 import xyz.xenondevs.nova.world.BlockPos
 import xyz.xenondevs.nova.world.block.tileentity.network.node.NetworkEndPoint
+import xyz.xenondevs.nova.world.block.tileentity.network.type.DefaultNetworkTypes.ITEM
+import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkConnectionType
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.holder.ItemHolder
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.inventory.NetworkedInventory
 import xyz.xenondevs.nova.world.format.NetworkState
@@ -39,12 +41,65 @@ import java.util.IdentityHashMap
  * Refusing the *pair* leaves the topology exactly as Nova built it. The connection still exists, the
  * updates still arrive, and the only thing declined is the transfer.
  */
+/**
+ * Closes every item face of this end point that has another item end point pressed against it, and opens
+ * the rest. Answers whether anything moved.
+ *
+ * ## Why the connection config, and not [NetworkedInventory.canExchangeItemsWith]
+ *
+ * Refusing the *pair* was the obvious way to say this and it does not work, for a reason worth writing
+ * down. Nova wraps every inventory in a `FilteredNetworkedInventory` and its `canExchangeItemsWith` is
+ * one line — `this.inventory.canExchangeItemsWith(other.inventory)` — which the distributor calls on
+ * **one side of the pair only**. When a chest gives and a barrel takes, the side asked is the chest;
+ * it is Nova's own and it answers yes. The barrel's refusal is never consulted at all.
+ *
+ * That hook can therefore only decline partners when *we* happen to be the side asked, which is why a
+ * barrel refusing another barrel worked and a barrel refusing a chest did nothing. The connection config
+ * is a statement about our own face, so nobody else has to agree with it.
+ *
+ * ## The two costs
+ *
+ * A face set to NONE that Nova still holds a connection to makes its network builder throw, and that
+ * takes down every network of every type. Hence `handleEndPointAllowedFacesChange` on every change, the
+ * same protocol Nova's own side config menu uses.
+ *
+ * And a closed face stops the updates that would say the chest is gone, so whoever calls this has to do
+ * it on a timer rather than only when notified.
+ */
+internal suspend fun NetworkEndPoint.closeTouchingItemFaces(
+    state: NetworkState,
+    pos: BlockPos,
+    holder: ItemHolder
+): Boolean {
+    var changed = false
+    val nearby = state.getNearbyNodes(pos, CUBE_FACES)
+
+    for (face in CUBE_FACES) {
+        val node = nearby[face]
+        // a cable is a bridge rather than an end point, so a wired face stays open — being piped to is
+        // exactly what this is meant to leave working
+        val touching = node is NetworkEndPoint && node.holders.any { it is ItemHolder }
+        val wanted = if (touching) NetworkConnectionType.NONE else NetworkConnectionType.BUFFER
+
+        if (holder.connectionConfig[face] == wanted)
+            continue
+
+        holder.connectionConfig[face] = wanted
+        state.getNetwork(this, ITEM, face)?.markDirty()
+        state.handleEndPointAllowedFacesChange(this, ITEM, face)
+        changed = true
+    }
+
+    return changed
+}
+
 internal class TouchingInventories {
 
     @Volatile
     private var inventories: Set<NetworkedInventory> = emptySet()
 
     operator fun contains(inventory: NetworkedInventory): Boolean = inventory in inventories
+
 
     /**
      * Identity throughout, not equality: two inventories that compare equal are still two different

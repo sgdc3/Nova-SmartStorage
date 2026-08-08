@@ -316,18 +316,19 @@ class WirelessTerminalBehavior(item: NovaItem) : ItemBehavior {
          * you are standing.
          */
         private fun openSearch() {
-            val items = content.contentProvider(player, filter, sortMode, columns = 8, visibleSlots = 24)
+            val items = content.contentProvider(player, filter, sortMode, columns = 8, visibleSlots = 32)
 
             val window = anvilWindow(player) {
                 title by DefaultGuiTextures.SEARCH.component
-                // three rows, as in the block terminals: Nova's search background draws three, and the
-                // fourth sat unframed in the gap below the panel
+                // 9x4, which InvUI requires of a split window's lower gui — see the storage terminal
                 lowerGui by content.contentGui(
                     items,
                     "x x x x x x x x u",
                     "x x x x x x x x d",
+                    "x x x x x x x x f",
                     "x x x x x x x x b"
                 ) {
+                    'f' by content.clearFilterButton(filter)
                     'b' by backButton(::openList)
                 }
                 text.subscribe(filter::set)

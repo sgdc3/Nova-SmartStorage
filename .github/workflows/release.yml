@@ -32,9 +32,10 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      # the full build, tests included: a tag that cannot pass them is not a release
+      # The full build, tests included: a tag that cannot pass them is not a release. `addonJar` is
+      # named explicitly because `build` stops at the plain jar — see the CI workflow.
       - name: Build and test
-        run: ./gradlew build --no-daemon
+        run: ./gradlew build addonJar --no-daemon
 
       # The tag is the source of truth for the version, and build.gradle.kts is the other place it is
       # written. Releasing them out of step would ship a jar whose name disagrees with its own tag.

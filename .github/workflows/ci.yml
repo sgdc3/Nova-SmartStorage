@@ -29,9 +29,12 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      # `build` runs the tests; --no-daemon because the runner is thrown away either way
+      # `build` compiles and runs the tests but stops at the plain jar — the addon jar, the one with the
+      # generated pack and the paper-plugin.yml in it, comes from a task of Nova's that nothing wires
+      # into `assemble`. Asking for both is what makes the upload below have something to find.
+      # --no-daemon because the runner is thrown away either way.
       - name: Build and test
-        run: ./gradlew build --no-daemon
+        run: ./gradlew build addonJar --no-daemon
 
       - name: Upload the addon jar
         uses: actions/upload-artifact@v7

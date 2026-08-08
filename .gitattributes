@@ -1,0 +1,14 @@
+# A shell script committed with CRLF has `#!/bin/sh\r` for a shebang, and a Linux kernel then looks for
+# an interpreter called `/bin/sh\r` and does not find one. It fails as exit 127, "required file not
+# found", which points at the script rather than at the line ending that broke it — so this is pinned
+# rather than left to whatever the checking-out machine happens to do.
+#
+# Deliberately no `* text=auto`: that would renormalise every text file in the repo on the next
+# checkout, and the problem being solved here is two files wide.
+gradlew text eol=lf
+*.sh    text eol=lf
+
+# The other half of the same rule. These are only ever run by Windows, where CRLF is what is expected.
+gradlew.bat text eol=crlf
+*.bat       text eol=crlf
+*.ps1       text eol=crlf

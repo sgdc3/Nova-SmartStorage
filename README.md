@@ -1,5 +1,8 @@
 # SmartStorage
 
+[![CI](https://github.com/sgdc3/Nova-SmartStorage/actions/workflows/ci.yml/badge.svg)](https://github.com/sgdc3/Nova-SmartStorage/actions/workflows/ci.yml)
+[![Licence: LGPL-3.0](https://img.shields.io/badge/licence-LGPL--3.0-blue.svg)](LICENSE)
+
 A [Nova](https://github.com/xenondevs/Nova) addon that brings AE2 / Refined Storage style centralized
 item storage to Paper.
 
@@ -381,17 +384,17 @@ block.
 - **Logistics** — optional. Its item cables and filters work with the Storage Interface if installed;
   nothing breaks if it isn't.
 
+## Installing
+
+Take `SmartStorage-*.jar` from the [latest release](https://github.com/sgdc3/Nova-SmartStorage/releases)
+and drop it into `plugins/` on a **Paper 26.2** server, beside `Nova` and `Simple_Upgrades`. Nova addons
+are Paper plugins in their own right — they ship a `paper-plugin.yml` pointing at Nova's addon loader —
+so there is nothing else to install and nothing to register.
+
+Config files are written to `plugins/SmartStorage/configs/` on first run. Players will be asked to accept
+Nova's resource pack; without it the blocks have no textures.
+
 ## Building
-
-The published `simple-upgrades` artifact on `repo.xenondevs.xyz` is stuck at `1.5-alpha.2` (built
-against Nova ~0.19) and does not link against Nova 0.24. Build it from source once:
-
-```bash
-pwsh -File tools/setup-deps.ps1
-```
-
-That clones `xenondevs/Nova-Addons` into `.deps/` and publishes `simple-upgrades:1.11.0` to your local
-Maven repository. Then:
 
 ```bash
 ./gradlew addonJar
@@ -451,9 +454,12 @@ A throwaway Paper server can be set up under `.server/` (gitignored):
 pwsh -File tools/setup-test-server.ps1
 ```
 
-It downloads Paper and Nova, builds Simple-Upgrades and Logistics from the `.deps/` clone, and writes a
-superflat/creative `server.properties`. It deliberately does **not** accept the Minecraft EULA — put
-`eula=true` in `.server/eula.txt` yourself first ([EULA](https://aka.ms/MinecraftEULA)).
+It downloads Paper, Nova and the two addons from Modrinth, and writes a superflat/creative
+`server.properties`. It deliberately does **not** accept the Minecraft EULA — put `eula=true` in
+`.server/eula.txt` yourself first ([EULA](https://aka.ms/MinecraftEULA)).
+
+Note the creative default when testing anything about drops: creative breaks a block without dropping
+it, which is Minecraft's rule and not this addon's.
 
 Then, to rebuild the addon and start the server in one step:
 

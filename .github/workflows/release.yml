@@ -1,0 +1,52 @@
+# Publishes a GitHub release when a version tag is pushed.
+#
+#   git tag v1.0.0 && git push origin v1.0.0
+#
+# The addon jar is built here rather than uploaded from a developer's machine, so what people download
+# is what the tagged commit produces.
+name: Release
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # release notes are generated from the log, which a shallow clone does not have
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # the full build, tests included: a tag that cannot pass them is not a release
+      - name: Build and test
+        run: ./gradlew build --no-daemon
+
+      # The tag is the source of truth for the version, and build.gradle.kts is the other place it is
+      # written. Releasing them out of step would ship a jar whose name disagrees with its own tag.
+      - name: Check the tag matches the project version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' build.gradle.kts)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match version $version in build.gradle.kts" >&2
+            exit 1
+          fi
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" build/libs/SmartStorage-*.jar --generate-notes

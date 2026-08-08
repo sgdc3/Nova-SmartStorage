@@ -1,0 +1,49 @@
+# Build and test on every push and pull request.
+#
+# There is nothing to set up beyond a JDK: every dependency resolves from a public repository —
+# Nova and its version catalog from repo.xenondevs.xyz, Simple Upgrades from Modrinth's Maven,
+# Paper and MockBukkit from theirs. A clone builds.
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # `build` runs the tests; --no-daemon because the runner is thrown away either way
+      - name: Build and test
+        run: ./gradlew build --no-daemon
+
+      - name: Upload the addon jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartStorage
+          path: build/libs/SmartStorage-*.jar
+          if-no-files-found: error
+
+      # only useful when something went red
+      - name: Upload the test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/test

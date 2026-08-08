@@ -3,7 +3,7 @@
 build/
 .kotlin/
 
-# Locally built dependencies (see tools/setup-deps.ps1)
+# Left over from when the Nova addons were built from a clone rather than fetched from Modrinth
 .deps/
 
 # Local test server (see tools/run-server.ps1)

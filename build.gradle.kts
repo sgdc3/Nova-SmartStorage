@@ -7,7 +7,7 @@ plugins {
 }
 
 repositories {
-    mavenLocal { content { includeGroupAndSubgroups("xyz.xenondevs") } }
+    maven("https://api.modrinth.com/maven") { content { includeGroup("maven.modrinth") } }
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
     maven("https://repo.xenondevs.xyz/releases/")
@@ -15,8 +15,11 @@ repositories {
 
 dependencies {
     implementation(libs.nova)
-    // built from source via tools/setup-deps.ps1 — the version on the public repo is too old for Nova 0.24
-    implementation("xyz.xenondevs.nova.addon:simple-upgrades:1.11.0")
+    // From Modrinth's Maven, because xenondevs' own still has this at 1.5-alpha.2, built against Nova
+    // ~0.19, which does not link against 0.24. Modrinth serves the release jar under the project slug,
+    // with a synthesised pom that declares no dependencies — which is what we want here, since Nova
+    // itself is already on the line above.
+    implementation("maven.modrinth:nova-simple-upgrades:1.11.0")
 
     // MockBukkit stands in for a running server, which is what an ItemStack needs before it will answer
     // anything interesting: max stack size, component-aware isSimilar, clone. The artifact id carries

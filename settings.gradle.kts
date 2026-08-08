@@ -2,8 +2,9 @@ rootProject.name = "smartstorage"
 
 dependencyResolutionManagement {
     repositories {
-        // simple-upgrades is published here by tools/setup-deps.ps1 — see README
-        mavenLocal { content { includeGroupAndSubgroups("xyz.xenondevs") } }
+        // Simple Upgrades, which xenondevs' own Maven still has at a version built against Nova ~0.19.
+        // Scoped to its group so nothing else is ever looked up here.
+        maven("https://api.modrinth.com/maven") { content { includeGroup("maven.modrinth") } }
         mavenCentral()
         maven("https://repo.papermc.io/repository/maven-public/")
         maven("https://repo.xenondevs.xyz/releases/")

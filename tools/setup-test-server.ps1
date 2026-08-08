@@ -1,7 +1,7 @@
 # Creates the local Paper test server in .server/ (gitignored).
 #
-# Downloads Paper and Nova, builds Simple-Upgrades and Logistics from the Nova-Addons clone that
-# tools/setup-deps.ps1 made, and writes a test-friendly server.properties.
+# Downloads Paper, Nova and the two Nova addons this one is built beside, and writes a test-friendly
+# server.properties.
 #
 # It deliberately does NOT write eula.txt: accepting Mojang's EULA is the operator's call.
 # See https://aka.ms/MinecraftEULA — then put `eula=true` in .server/eula.txt yourself.
@@ -20,13 +20,9 @@ $server = Join-Path $root '.server'
 # Nova addons are Paper plugins in their own right (they ship a paper-plugin.yml pointing at Nova's
 # addon loader), so they live in plugins/ — not in an addons subfolder.
 $addons = Join-Path $server 'plugins'
-$deps = Join-Path $root '.deps\Nova-Addons'
 
 if (-not $env:JAVA_HOME) {
     throw 'JAVA_HOME is not set. A JDK 25 toolchain is required.'
-}
-if (-not (Test-Path $deps)) {
-    throw "No Nova-Addons clone at $deps. Run tools/setup-deps.ps1 first."
 }
 
 New-Item -ItemType Directory -Force $addons | Out-Null
@@ -57,13 +53,32 @@ if (-not (Test-Path $novaJar)) {
 }
 
 # --- Addons ------------------------------------------------------------------------------------
-Write-Host 'Building Simple-Upgrades and Logistics ...' -ForegroundColor Cyan
-Push-Location $deps
-try {
-    & (Join-Path $deps 'gradlew.bat') ':simple-upgrades:addonJar' ':logistics:addonJar' "-PoutDir=$addons" '--no-daemon'
-    if ($LASTEXITCODE -ne 0) { throw "Gradle build failed with exit code $LASTEXITCODE" }
-} finally {
-    Pop-Location
+# Downloaded from Modrinth, where xenondevs publish the release jars, rather than built from source.
+# This used to shallow-clone Nova-Addons and run a full Gradle build of it on every setup, which is a
+# lot of machinery to end up with two jars somebody has already built and published.
+#
+# The filename comes from the API rather than being written here, so a version bump is one number.
+$modrinthAddons = @(
+    @{ Slug = 'nova-simple-upgrades'; Version = '1.11.0' }  # required
+    @{ Slug = 'nova-logistics'; Version = '0.8.0' }         # optional at runtime, wanted for testing
+)
+
+foreach ($addon in $modrinthAddons) {
+    Write-Host "Resolving $($addon.Slug) $($addon.Version) on Modrinth ..." -ForegroundColor Cyan
+    $version = Invoke-RestMethod "https://api.modrinth.com/v2/project/$($addon.Slug)/version/$($addon.Version)"
+
+    $file = $version.files | Where-Object { $_.primary } | Select-Object -First 1
+    if (-not $file) { $file = $version.files[0] }
+
+    $target = Join-Path $addons $file.filename
+    if (Test-Path $target) {
+        Write-Host "$($file.filename) already present"
+        continue
+    }
+
+    Write-Host "Downloading $($file.filename) ..." -ForegroundColor Cyan
+    & curl.exe -L --fail --progress-bar -o $target $file.url
+    if ($LASTEXITCODE -ne 0) { throw "Download of $($file.filename) failed" }
 }
 
 # --- server.properties -------------------------------------------------------------------------

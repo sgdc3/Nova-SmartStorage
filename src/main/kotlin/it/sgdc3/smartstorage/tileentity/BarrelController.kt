@@ -633,15 +633,16 @@ class BarrelController(
             val window = anvilWindow(player) {
                 // Nova's own search background, so the anvil stops looking like an anvil
                 title by DefaultGuiTextures.SEARCH.component
-                // Four rows, and not by choice: InvUI's split windows require the lower gui to be
-                // exactly 9x4, because it *is* the player inventory — three rows and the hotbar. The
-                // hotbar row is drawn detached from the panel above it, which is vanilla's doing and
-                // not something a background can close up.
+                // Four rows and three rows of results, which is not a contradiction: InvUI requires a
+                // split window's lower gui to be exactly 9x4 because it *is* the player inventory —
+                // three rows and the hotbar — while Nova's search background only frames the three.
+                // The hotbar row is drawn detached below the panel, so anything listed there sits
+                // outside it. It is left empty, and carries the one button that has to be reachable.
                 lowerGui by listGui(
                     "x x x x x x x x u",
                     "x x x x x x x x d",
                     "x x x x x x x x f",
-                    "x x x x x x x x b"
+                    ". . . . . . . . b"
                 ) {
                     'f' by clearFilterButton()
                     'b' by backButton()

@@ -55,7 +55,7 @@ class CraftingTerminal(
 
         /** 6 columns x 5 rows here, since the crafting grid takes the right third; 8 x 4 in the search window */
         private val content = contentProvider(player, filter, sortMode, columns = 6, visibleSlots = 30)
-        private val searchContent = contentProvider(player, filter, sortMode, columns = 8, visibleSlots = 32)
+        private val searchContent = contentProvider(player, filter, sortMode, columns = 8, visibleSlots = 24)
 
         override val gui = contentGui(
             content,
@@ -98,13 +98,14 @@ class CraftingTerminal(
             val window = anvilWindow(player) {
                 // Nova's own search background, so the anvil stops looking like an anvil
                 title by DefaultGuiTextures.SEARCH.component
-                // 9x4, which InvUI requires of a split window's lower gui — see the storage terminal
+                // 9x4 because InvUI requires it, three rows of results because that is what the
+                // background frames — see the storage terminal
                 lowerGui by contentGui(
                     searchContent,
                     "x x x x x x x x u",
                     "x x x x x x x x d",
                     "x x x x x x x x f",
-                    "x x x x x x x x b"
+                    ". . . . . . . . b"
                 ) {
                     'f' by clearFilterButton(filter)
                     'b' by backButton()

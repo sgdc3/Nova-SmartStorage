@@ -33,9 +33,9 @@ class StorageTerminal(
         private val filter = searchState()
         private val sortMode = sortState()
 
-        /** 8 columns x 5 rows in the terminal itself, 8 x 4 in the search window's lower gui */
+        /** 8 columns x 5 rows in the terminal itself, 8 x 3 in the search window — see [openSearch] */
         private val content = contentProvider(player, filter, sortMode, columns = 8, visibleSlots = 40)
-        private val searchContent = contentProvider(player, filter, sortMode, columns = 8, visibleSlots = 32)
+        private val searchContent = contentProvider(player, filter, sortMode, columns = 8, visibleSlots = 24)
 
         override val gui = contentGui(
             content,
@@ -80,14 +80,16 @@ class StorageTerminal(
             val window = anvilWindow(player) {
                 // Nova's own search background, so the anvil stops looking like an anvil
                 title by DefaultGuiTextures.SEARCH.component
-                // Four rows, and not by choice: InvUI's split windows require the lower gui to be
-                // exactly 9x4 — it *is* the player inventory, three rows and the hotbar.
+                // Four rows and three rows of results. InvUI requires a split window's lower gui to be
+                // exactly 9x4 — it *is* the player inventory, three rows and the hotbar — while Nova's
+                // search background frames only the three. The hotbar row sits below the panel, so it
+                // is left empty and carries the one button that has to be reachable.
                 lowerGui by contentGui(
                     searchContent,
                     "x x x x x x x x u",
                     "x x x x x x x x d",
                     "x x x x x x x x f",
-                    "x x x x x x x x b"
+                    ". . . . . . . . b"
                 ) {
                     'f' by clearFilterButton(filter)
                     'b' by backButton()

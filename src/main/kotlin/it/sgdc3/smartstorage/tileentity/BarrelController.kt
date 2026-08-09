@@ -27,6 +27,7 @@ import xyz.xenondevs.invui.gui.Markers
 import xyz.xenondevs.invui.inventory.event.ItemPreUpdateEvent
 import xyz.xenondevs.invui.item.Item
 import xyz.xenondevs.invui.item.ItemBuilder
+import xyz.xenondevs.invui.item.ItemProvider
 import xyz.xenondevs.nova.config.entry
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
@@ -57,9 +58,14 @@ private val MAX_BARRELS by BARREL_CONTROLLER.config.entry<Int>("max_barrels")
 private val RESCAN_TICKS by BARREL_CONTROLLER.config.entry<Int>("rescan_ticks")
 
 /**
- * One barrel per exposed slot, so the item network sees the wall rather than the block it is wired to.
+ * How many slots the item network sees, so that it addresses the wall rather than the block it is
+ * wired to.
+ *
+ * [EXPOSED_TIERS] per barrel rather than one, because a compacting barrel offers every rung of its
+ * ladder — iron as blocks, as ingots, as nuggets — and each has to be a slot a pipe can name. Nova
+ * reads the count once when a network is built.
  */
-private val EXPOSED_SLOTS = MAX_BARRELS
+private val EXPOSED_SLOTS = MAX_BARRELS * EXPOSED_TIERS
 
 /**
  * The drop-off slot in the controller's own menu. One, beside the readout, rather than filling the
@@ -345,18 +351,11 @@ class BarrelController(
     /**
      * Whether any barrel on the wall would take [type] right now.
      *
-     * A barrel takes it if it already holds that type, or holds nothing yet and would take it on — and
-     * in either case only while it has room. `hasRoom` already answers "always" for a barrel with a
-     * Void Upgrade in it, which is the whole of that feature, so voiding barrels make the wall accept
-     * their own type forever and this inherits that without restating it.
-     *
-     * A barrel locked onto an item it has since run out of still counts, and is the reason the test is
-     * on the stored *type* rather than on the stored amount: locking is how a player says "this one is
-     * for iron", and a deposit slot that stopped accepting iron the moment the last ingot left would
-     * be contradicting them.
+     * Each barrel answers for itself — see [StorageBarrel.accepts], which is the same rule its insert
+     * applies. The wall does not restate it, because a second copy would drift from the first and the
+     * drift would show up as a drop-off slot that swallows something no barrel then wants.
      */
-    fun accepts(type: ItemType): Boolean =
-        barrels.any { (it.storedType == null || it.storedType == type) && it.hasRoom }
+    fun accepts(type: ItemType): Boolean = barrels.any { it.accepts(type) }
 
     fun countOf(type: ItemType): Long {
         var total = 0L
@@ -364,12 +363,14 @@ class BarrelController(
         return total
     }
 
+    /**
+     * One line per barrel, at its densest rung — see
+     * [BarrelBacking.collectInto][StorageConnector] for why never more than one.
+     */
     fun collectInto(index: MutableMap<ItemType, Long>) {
         for (barrel in barrels) {
-            val type = barrel.storedType ?: continue
-            val amount = barrel.storedAmount
-            if (amount > 0L)
-                index.merge(type, amount) { a, b -> a + b }
+            val (type, held) = barrel.offers().firstOrNull() ?: continue
+            index.merge(type, held) { a, b -> a + b }
         }
     }
 
@@ -395,6 +396,17 @@ class BarrelController(
         }
 
         return amount - left
+    }
+
+    /**
+     * Undoes an [insert] across the wall, in the units it was made in — see [StorageBarrel.retract].
+     */
+    fun retract(type: ItemType, amount: Long) {
+        var left = amount
+        for (barrel in barrels) {
+            if (left <= 0L) break
+            left -= barrel.retract(type, left)
+        }
     }
 
     fun extract(type: ItemType, amount: Long): Long {
@@ -436,7 +448,9 @@ class BarrelController(
 
             val left = stack.amount - stored
             val updated = if (left <= 0) null else stack.clone().apply { amount = left }
-            if (depositInventory.setItem(SELF_UPDATE_REASON, slot, updated)) moved = true else extract(type, stored.toLong())
+            // retract, not extract: a compacting barrel was handed ingots and is holding blocks, so
+            // asking it for the ingots back gets nothing and the items exist twice
+            if (depositInventory.setItem(SELF_UPDATE_REASON, slot, updated)) moved = true else retract(type, stored.toLong())
         }
 
         if (moved)
@@ -444,7 +458,24 @@ class BarrelController(
     }
 
     private fun refreshEntries() {
-        val next = barrels.map { Entry(it, it.storedType, it.storedAmount, it.capacity) }
+        // What the wall *holds*, not which block holds it: one line per item, summed across every
+        // barrel. Two barrels of cobblestone are one line, because "there is cobblestone here" is the
+        // question the list answers, and which barrel it sits in is the wall's business.
+        //
+        // Empty barrels contribute nothing at all. An empty barrel is a place to put something rather
+        // than something the wall holds, and the drop-off slot is how you fill one.
+        val totals = LinkedHashMap<ItemType, Long>()
+        for (barrel in barrels) {
+            // A compacting barrel counts at every rung of its ladder, so the wall can be asked for
+            // ingots as readily as for blocks. Those lines are **the same iron at three densities**,
+            // not three stocks — which is exactly why they are summed *per item* and never across.
+            //
+            // The same list the network is offered, so the menu cannot show a line a pipe cannot ask for.
+            for ((tier, held) in barrel.offers())
+                totals.merge(tier, held, Long::plus)
+        }
+
+        val next = totals.map { (type, amount) -> Entry(type, amount) }
 
         // the provider invalidates on version rather than on value, so setting an equal list would
         // still rebuild every row for a wall nobody has touched
@@ -455,12 +486,13 @@ class BarrelController(
     /**
      * One row of the controller's menu: what a barrel held the last time the wall was scanned.
      */
-    private data class Entry(
-        val barrel: StorageBarrel,
-        val type: ItemType?,
-        val amount: Long,
-        val capacity: Long
-    )
+    /**
+     * One line of the wall's contents: an item, and how much of it the whole wall has.
+     *
+     * Carries no barrel, and that is the point — the list is of what is stored, not of what is storing
+     * it, so a click acts on the wall and lets it decide which barrel answers.
+     */
+    private data class Entry(val type: ItemType, val amount: Long)
 
     /**
      * The whole wall as Nova's item network sees it: one slot per barrel.
@@ -518,24 +550,43 @@ class BarrelController(
 
         override fun isFull(): Boolean = !hasRoom
 
-        override fun isEmpty(): Boolean = usedCount <= 0L
+        // not usedCount: that counts whole stored items, and a compacting barrel worn down to a part of
+        // a block still holds something a pipe can be given — see StorageBarrel.hasContents
+        override fun isEmpty(): Boolean = barrels.none(StorageBarrel::hasContents)
 
+        /**
+         * The wall as slots: one per barrel, and one per *rung* for the barrels that compact.
+         *
+         * A compacting barrel appears three times over — as blocks, as ingots, as nuggets — so a pipe
+         * can ask it for whichever it wants. **Those slots are one stock seen three ways.** Nothing may
+         * add them up, and nothing does: [canTake] and [take] both read the barrel live rather than the
+         * snapshot, so the moment blocks leave through one slot the other two answer smaller. The
+         * snapshot only ever records which barrel and which rung a slot number meant.
+         */
         override fun copyContents(destination: Array<ItemStack>) {
-            val barrels = this@BarrelController.barrels
             val slots = arrayOfNulls<Pair<StorageBarrel, ItemType>>(EXPOSED_SLOTS)
+            var at = 0
 
-            for (i in 0..<EXPOSED_SLOTS) {
-                val barrel = barrels.getOrNull(i)
-                val type = barrel?.storedType
-                val amount = barrel?.storedAmount ?: 0L
+            for (barrel in this@BarrelController.barrels) {
+                if (at >= EXPOSED_SLOTS)
+                    break
 
-                if (type == null || amount <= 0L) {
-                    destination[i] = ItemStack.empty()
-                    continue
+                // The barrel's own answer, capped at its own budget: the wall must address it exactly as
+                // a pipe pressed straight against it would, and a second copy of "what can be taken out
+                // of here" would drift from the first without anybody noticing.
+                for ((type, held) in barrel.offers()) {
+                    if (at >= EXPOSED_SLOTS)
+                        break
+
+                    slots[at] = barrel to type
+                    destination[at] = type.createStack(min(held, type.maxStackSize.toLong()).toInt())
+                    at++
                 }
+            }
 
-                slots[i] = barrel to type
-                destination[i] = type.createStack(min(amount, type.maxStackSize.toLong()).toInt())
+            while (at < EXPOSED_SLOTS) {
+                destination[at] = ItemStack.empty()
+                at++
             }
 
             this.slots = slots
@@ -575,41 +626,62 @@ class BarrelController(
         private val filter: MutableProvider<String> = mutableProvider("")
         private val sortMode = TerminalContent.sortState()
 
-        private val rows: Provider<List<Item>> = combinedProvider(entries, filter, sortMode) { list, text, mode ->
-            // Rendering an item's name and flattening it to plain text is the expensive part, so it is
-            // only done when there is something to match against — a wall nobody is searching costs
-            // nothing more than it did before.
-            val matching = if (text.isBlank()) list else list.filter { entry ->
-                val type = entry.type ?: return@filter false
-                ItemUtils.getName(type.stack).toPlainText(player).contains(text, ignoreCase = true)
+        /** 7 columns x 4 rows in the controller itself, 8 x 3 in the search window's lower gui. */
+        private val rows = rowsProvider(columns = 7, visibleSlots = 28)
+        private val searchRows = rowsProvider(columns = 8, visibleSlots = 24)
+
+        /**
+         * The list, padded out to whole rows with slots that take what you drop on them.
+         *
+         * The padding is why an item can go into *any* cell of the grid rather than only onto a line
+         * that already holds one: a wall with three things in it still shows a full screen, and every
+         * empty square of it is somewhere to put a fourth. Without it, filling a barrel with something
+         * new meant finding the drop-off slot in the corner.
+         */
+        private fun rowsProvider(columns: Int, visibleSlots: Int): Provider<List<Item>> =
+            combinedProvider(entries, filter, sortMode) { list, text, mode ->
+                // Rendering an item's name and flattening it to plain text is the expensive part, so it
+                // is only done when there is something to match against — a wall nobody is searching
+                // costs nothing more than it did before.
+                val matching = if (text.isBlank()) list else list.filter { entry ->
+                    ItemUtils.getName(entry.type.stack).toPlainText(player).contains(text, ignoreCase = true)
+                }
+
+                val items = sorted(matching, mode).mapTo(ArrayList<Item>(matching.size)) { rowItem(it) }
+
+                // fill up to a whole number of rows, and never leave the first screen half-dead
+                val lines = (items.size + columns - 1) / columns
+                repeat(max(visibleSlots, lines * columns) - items.size) { items += depositTargetItem() }
+
+                items
             }
 
-            sorted(matching, mode).mapTo(ArrayList(matching.size)) { rowItem(it) }
+        /**
+         * An empty square that swallows whatever is dropped on it into the wall. The gui texture draws
+         * the slot underneath, so there is nothing to render.
+         */
+        private fun depositTargetItem(): Item = item {
+            itemProvider by ItemProvider.EMPTY
+            onClick {
+                if (!player.itemOnCursor.isEmpty)
+                    depositCursor(player, all = !clickType.isRightClick)
+            }
         }
 
         /**
-         * The wall in the order the player asked for, with the empty barrels always last.
+         * The wall's contents in the order the player asked for.
          *
-         * They sort to the end rather than by their (absent) name or their zero count because an empty
-         * barrel is not a small entry, it is a place to put something — and a list that opens with a
-         * screenful of them buries what the wall actually holds.
-         *
-         * Sorting by name renders one name per barrel, which the search deliberately avoids doing unless
+         * Sorting by name renders one name per line, which the search deliberately avoids doing unless
          * it has to. It is affordable here for the same reason the scan is: a wall is at most
-         * `max_barrels` rows, not a whole network's worth of item types.
+         * `max_barrels` lines, not a whole network's worth of item types.
          */
-        private fun sorted(entries: List<Entry>, mode: SortMode): List<Entry> {
-            val comparator = when (mode) {
-                SortMode.AMOUNT -> compareByDescending<Entry> { it.amount }
-                SortMode.NAME -> compareBy { entry ->
-                    entry.type?.let { ItemUtils.getName(it.stack).toPlainText(player) } ?: ""
-                }
-            }
-
-            return entries.sortedWith(compareBy<Entry> { it.type == null }.then(comparator))
+        private fun sorted(entries: List<Entry>, mode: SortMode): List<Entry> = when (mode) {
+            SortMode.AMOUNT -> entries.sortedByDescending { it.amount }
+            SortMode.NAME -> entries.sortedBy { ItemUtils.getName(it.type.stack).toPlainText(player) }
         }
 
         override val gui = listGui(
+            rows,
             "x x x x x x x s u",
             "x x x x x x x f d",
             "x x x x x x x o .",
@@ -636,6 +708,7 @@ class BarrelController(
          * same clicks, a different frame around them.
          */
         private fun listGui(
+            items: Provider<List<Item>>,
             vararg structure: String,
             extraIngredients: IngredientsDsl.() -> Unit = {}
         ) = scrollItemsGui(*structure) {
@@ -645,7 +718,7 @@ class BarrelController(
             'u' by scrollUpItem(line)
             'd' by scrollDownItem(line, maxLine)
             extraIngredients()
-            content by rows
+            content by items
         }
 
         private fun searchButton(): Item = item {
@@ -711,6 +784,7 @@ class BarrelController(
                 // The hotbar row is drawn detached below the panel, so anything listed there sits
                 // outside it. It is left empty, and carries the one button that has to be reachable.
                 lowerGui by listGui(
+                    searchRows,
                     "x x x x x x x x u",
                     "x x x x x x x x d",
                     "x x x x x x x x f",
@@ -742,53 +816,42 @@ class BarrelController(
             itemProvider by rowIcon(entry)
             onClick {
                 if (!player.itemOnCursor.isEmpty) {
-                    depositCursor(player, entry.barrel, all = !clickType.isRightClick)
+                    depositCursor(player, all = !clickType.isRightClick)
                     return@onClick
                 }
 
-                val type = entry.barrel.storedType ?: return@onClick
-                val stackSize = type.maxStackSize
+                val stackSize = entry.type.maxStackSize
                 when {
-                    clickType.isShiftClick -> takeToInventory(player, entry.barrel, type, stackSize)
-                    clickType == ClickType.LEFT -> takeToCursor(player, entry.barrel, type, stackSize)
-                    clickType == ClickType.RIGHT -> takeToCursor(player, entry.barrel, type, max(1, stackSize / 2))
+                    clickType.isShiftClick -> takeToInventory(player, entry.type, stackSize)
+                    clickType == ClickType.LEFT -> takeToCursor(player, entry.type, stackSize)
+                    clickType == ClickType.RIGHT -> takeToCursor(player, entry.type, max(1, stackSize / 2))
                     else -> return@onClick
                 }
             }
         }
 
-        private fun rowIcon(entry: Entry): ItemBuilder {
-            val type = entry.type
-
-            val builder = if (type == null) {
-                ItemBuilder(Material.GRAY_STAINED_GLASS_PANE).setName(
-                    Component.translatable("menu.smartstorage.barrel.empty", NamedTextColor.GRAY)
-                        .withoutPreFormatting()
+        private fun rowIcon(entry: Entry): ItemBuilder =
+            ItemBuilder(entry.type.createStack(max(1, min(entry.amount, entry.type.maxStackSize.toLong()).toInt())))
+                .setLore(
+                    listOf(
+                        Component.translatable(
+                            "menu.smartstorage.terminal.stored",
+                            NamedTextColor.GRAY,
+                            Component.text(entry.amount, NamedTextColor.GREEN)
+                        ).withoutPreFormatting(),
+                        Component.translatable("menu.smartstorage.barrel.hint", NamedTextColor.DARK_GRAY)
+                            .withoutPreFormatting()
+                    )
                 )
-            } else {
-                ItemBuilder(type.createStack(max(1, min(entry.amount, type.maxStackSize.toLong()).toInt())))
-            }
 
-            return builder.setLore(
-                listOf(
-                    Component.translatable(
-                        "menu.smartstorage.barrel.stored",
-                        NamedTextColor.GRAY,
-                        Component.text(entry.amount, NamedTextColor.GREEN),
-                        Component.text(entry.capacity, NamedTextColor.GREEN)
-                    ).withoutPreFormatting(),
-                    Component.translatable("menu.smartstorage.barrel.hint", NamedTextColor.DARK_GRAY)
-                        .withoutPreFormatting()
-                )
-            )
-        }
-
-        private fun depositCursor(player: Player, barrel: StorageBarrel, all: Boolean) {
+        private fun depositCursor(player: Player, all: Boolean) {
             val cursor = player.itemOnCursor
             val candidate = ItemType.of(cursor) ?: return
 
             val offered = if (all) cursor.amount else 1
-            val stored = barrel.insert(candidate, offered.toLong()).toInt()
+            // the wall, not one barrel: it routes to whichever holds this already, and only then to an
+            // empty one — see BarrelController.insert
+            val stored = insert(candidate, offered.toLong()).toInt()
             if (stored <= 0)
                 return
 
@@ -797,11 +860,11 @@ class BarrelController(
             refreshEntries()
         }
 
-        private fun takeToCursor(player: Player, barrel: StorageBarrel, type: ItemType, count: Int) {
+        private fun takeToCursor(player: Player, type: ItemType, count: Int) {
             if (!player.itemOnCursor.isEmpty)
                 return
 
-            val taken = barrel.extract(type, count.toLong()).toInt()
+            val taken = extract(type, count.toLong()).toInt()
             if (taken <= 0)
                 return
 
@@ -809,15 +872,15 @@ class BarrelController(
             refreshEntries()
         }
 
-        private fun takeToInventory(player: Player, barrel: StorageBarrel, type: ItemType, count: Int) {
-            val taken = barrel.extract(type, count.toLong()).toInt()
+        private fun takeToInventory(player: Player, type: ItemType, count: Int) {
+            val taken = extract(type, count.toLong()).toInt()
             if (taken <= 0)
                 return
 
             val leftover = player.inventory.addItemCorrectly(type.createStack(taken))
             if (leftover > 0) {
-                // back into the barrel, and onto the floor for whatever it will no longer take
-                val rejected = leftover - barrel.insert(type, leftover.toLong()).toInt()
+                // back into the wall, and onto the floor for whatever it will no longer take
+                val rejected = leftover - insert(type, leftover.toLong()).toInt()
                 if (rejected > 0)
                     player.world.dropItemNaturally(player.location, type.createStack(rejected))
             }

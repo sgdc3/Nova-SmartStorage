@@ -584,11 +584,15 @@ class StorageConnector(
         override val usedCount: Long
             get() = barrel.storedAmount
 
+        /**
+         * The densest rung only, never all of them: the same iron listed as blocks *and* ingots *and*
+         * nuggets would be counted three times in a network total, which is the one thing an index must
+         * not do. Taking the densest rather than the stored type is what keeps a barrel worn down to a
+         * part of a block from reading as empty — see [StorageBarrel.hasContents].
+         */
         override fun collectInto(index: MutableMap<ItemType, Long>) {
-            val type = barrel.storedType ?: return
-            val amount = barrel.storedAmount
-            if (amount > 0L)
-                index.merge(type, amount) { a, b -> a + b }
+            val (type, held) = barrel.offers().firstOrNull() ?: return
+            index.merge(type, held) { a, b -> a + b }
         }
 
         override fun countOf(type: ItemType): Long = barrel.countOf(type)

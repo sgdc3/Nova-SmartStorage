@@ -3,6 +3,7 @@ package it.sgdc3.smartstorage.tileentity
 import org.bukkit.block.BlockFace
 import xyz.xenondevs.nova.util.CUBE_FACES
 import xyz.xenondevs.nova.world.BlockPos
+import xyz.xenondevs.nova.world.block.tileentity.network.node.NetworkBridge
 import xyz.xenondevs.nova.world.block.tileentity.network.node.NetworkEndPoint
 import xyz.xenondevs.nova.world.block.tileentity.network.node.NetworkNode
 import xyz.xenondevs.nova.world.block.tileentity.network.type.DefaultNetworkTypes.ITEM
@@ -57,11 +58,22 @@ import java.util.IdentityHashMap
  * take back what it had just put in. Neither is what anybody built.
  *
  * Giving only the bottom face both directions restores the rule players already expect from a hopper:
- * items go in from the sides and the top and come out underneath. The cost is that a cable on a side can
- * only fill a barrel — to drain one, put the cable below it.
+ * items go in from the sides and the top and come out underneath.
  *
  * The controller does not take this. A wall's mouth is meant to be served by "one pipe or one connector"
  * on whichever side is convenient, and sides that only accept would break that.
+ *
+ * ## A cable's face belongs to the player
+ *
+ * Nova's side config menu — the one a wrench opens on a pipe — edits this very map, on the *end point*
+ * rather than on the cable. So a face with a cable against it is left exactly as it is found: writing
+ * anything would silently undo whatever the player had just set, which reads as a menu that does not
+ * save.
+ *
+ * With one exception, because leaving it alone unconditionally is worse. A face closed against a chest
+ * that has since been replaced by a cable would stay closed, which is a dead connection — and a NONE
+ * face Nova still holds a connection to is the one that makes its network builder throw. So a cable
+ * found on a closed face reopens it, once, and after that the face is the player's.
  *
  * ## Why the connection config, and not [NetworkedInventory.canExchangeItemsWith]
  *
@@ -127,13 +139,24 @@ internal suspend fun NetworkEndPoint.restrictItemFaces(
     val nearby = state.getNearbyNodes(pos, CUBE_FACES)
 
     for (face in CUBE_FACES) {
+        val node = nearby[face]
+        val current = holder.connectionConfig[face]
+
+        // the player's wiring, and their menu writes here — see above for the one exception
+        if (node is NetworkBridge && current != NetworkConnectionType.NONE)
+            continue
+
         val wanted = when {
-            isPassiveStorage(nearby[face]) -> NetworkConnectionType.NONE
+            node is NetworkBridge -> NetworkConnectionType.BUFFER
+            // nothing there: back to neutral, so that a cable put here later starts from both
+            // directions open rather than from whatever the last neighbour left behind
+            node == null -> NetworkConnectionType.BUFFER
+            isPassiveStorage(node) -> NetworkConnectionType.NONE
             !extractOnlyFromBelow || face == BlockFace.DOWN -> NetworkConnectionType.BUFFER
             else -> NetworkConnectionType.INSERT
         }
 
-        if (holder.connectionConfig[face] == wanted)
+        if (current == wanted)
             continue
 
         holder.connectionConfig[face] = wanted

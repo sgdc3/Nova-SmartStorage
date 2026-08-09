@@ -349,18 +349,27 @@ speaks for it produce the same storage identity and the network keeps one of the
 To Nova a barrel and a controller are ordinary **item network** end points, each with a single `BUFFER`
 container, so item cables, hoppers and machines reach them with no integration on either side.
 
-With one rule on top: **neither trades with anything it is merely touching.** Nova connects two end
-points that *touch* directly, with no cable in between — which is exactly how a wall of barrels is built,
-and how it has to be built, since that is how a controller finds them. Left alone the item network looks
-at a full barrel and an empty chest beside it and does the obvious thing: moves a stack across, every
-tick, forever, in whichever direction the numbers happen to point. Nobody placed either block asking for
-that.
+With one rule on top: **neither trades with storage it is merely touching.** Nova connects two end points
+that *touch* directly, with no cable in between — which is exactly how a wall of barrels is built, and how
+it has to be built, since that is how a controller finds them. Left alone the item network looks at a full
+barrel and an empty chest beside it and does the obvious thing: moves a stack across, every tick, forever,
+in whichever direction the numbers happen to point. Nobody placed either block asking for that.
 
-A barrel is **passive storage**. It moves items when a pipe, a connector or a player asks it to, and at
-no other time. The cost is that a hopper or a machine set straight against a barrel no longer feeds it —
-one segment of cable between them does. The distributor asks about a *pair*, not about a path, so
-"adjacent, but with a cable" cannot be expressed here; the choice is only which way to be wrong, and a
-barrel that quietly empties itself into the chest next door is the worse one.
+The line is not "is this a neighbour" but "does this neighbour move items or only hold them". A chest, a
+vanilla barrel, another storage barrel: those are storage, and a barrel closes its face to them. A hopper,
+a furnace, a machine, a cable: those move items, and setting one against a barrel says exactly what should
+happen, so the face stays open.
+
+**Items leave a barrel from underneath.** Nova's item network has no notion of which way a hopper points —
+it sees two end points touching and lets the distributor pick a direction — so an open face is open both
+ways. A hopper set *beside* a barrel, which in vanilla would not reach it at all, could drain it; one
+pointing into it could take back what it had just put in. Only the bottom face carries both directions:
+in from the sides and the top, out from below.
+
+A **cable** is exempt from all of that. Nova's side config — the menu a wrench opens on a pipe — edits the
+barrel's own face, so the barrel leaves any face with a cable on it exactly as it finds it, and what that
+side does is whatever you set. The controller is exempt too, on every face: a wall's mouth is meant to be
+served by one pipe on whichever side is convenient.
 
 To this addon's own storage network they are deliberately nothing at all. Neither carries a
 `StorageHolder`, so a storage cable will not bridge to one and a controller will never count it as a

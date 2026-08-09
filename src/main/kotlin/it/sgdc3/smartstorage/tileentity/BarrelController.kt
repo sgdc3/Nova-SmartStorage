@@ -24,6 +24,7 @@ import xyz.xenondevs.invui.dsl.item
 import xyz.xenondevs.invui.dsl.scrollItemsGui
 import xyz.xenondevs.invui.dsl.with
 import xyz.xenondevs.invui.gui.Markers
+import xyz.xenondevs.invui.inventory.event.ItemPreUpdateEvent
 import xyz.xenondevs.invui.item.Item
 import xyz.xenondevs.invui.item.ItemBuilder
 import xyz.xenondevs.nova.config.entry
@@ -140,6 +141,36 @@ class BarrelController(
      * Whatever the wall will not take stays sitting in the slot rather than vanishing.
      */
     private val depositInventory = storedInventory("deposit", DEPOSIT_SLOTS)
+        .apply { addPreUpdateHandler(::screenDeposit) }
+
+    /**
+     * Turns the drop-off slot away from anything the wall could not store anyway.
+     *
+     * Without this the slot takes the item and then cannot get rid of it: the drain finds no barrel
+     * willing to hold it, so it sits there, and the next shift-click has nowhere to land. One stack of
+     * something the wall does not want jams the whole slot.
+     *
+     * Refusing instead means the item never leaves the player's inventory, and a shift-click on it is
+     * simply a click that does nothing — which is what makes it worth holding shift down a row of
+     * mixed items. What the wall wants goes in; what it does not, stays put and gets skipped.
+     *
+     * This is a snapshot of a wall that is still moving, and deliberately so: an item refused now
+     * because every barrel is full goes in a moment later once something drains one. Being briefly
+     * wrong in the permissive direction costs a click; being wrong the other way would jam the slot,
+     * which is the state this exists to prevent.
+     */
+    private fun screenDeposit(event: ItemPreUpdateEvent) {
+        // the drain writes the leftover back through this same slot, and it must not be second-guessed:
+        // by then the items are already in the wall, and refusing the write would duplicate them
+        if (event.updateReason == SELF_UPDATE_REASON)
+            return
+
+        val incoming = event.newItem ?: return
+        val type = ItemType.of(incoming) ?: return
+
+        if (!accepts(type))
+            event.isCancelled = true
+    }
 
     private val entries: MutableProvider<List<Entry>> = mutableProvider(emptyList())
 
@@ -310,6 +341,22 @@ class BarrelController(
         }
 
     fun holds(type: ItemType): Boolean = barrels.any { it.holds(type) }
+
+    /**
+     * Whether any barrel on the wall would take [type] right now.
+     *
+     * A barrel takes it if it already holds that type, or holds nothing yet and would take it on — and
+     * in either case only while it has room. `hasRoom` already answers "always" for a barrel with a
+     * Void Upgrade in it, which is the whole of that feature, so voiding barrels make the wall accept
+     * their own type forever and this inherits that without restating it.
+     *
+     * A barrel locked onto an item it has since run out of still counts, and is the reason the test is
+     * on the stored *type* rather than on the stored amount: locking is how a player says "this one is
+     * for iron", and a deposit slot that stopped accepting iron the moment the last ingot left would
+     * be contradicting them.
+     */
+    fun accepts(type: ItemType): Boolean =
+        barrels.any { (it.storedType == null || it.storedType == type) && it.hasRoom }
 
     fun countOf(type: ItemType): Long {
         var total = 0L

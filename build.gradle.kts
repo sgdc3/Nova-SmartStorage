@@ -1,5 +1,8 @@
 group = "it.sgdc3"
-version = "1.0.0-beta.1"
+// Everything since v1.0.0-beta.1, and not itself a release: the release workflow refuses to publish a
+// tag whose name does not match this line, so main carries the next version with -SNAPSHOT on it until
+// the moment that version is actually tagged.
+version = "1.0.0-beta.2-SNAPSHOT"
 
 plugins {
     alias(libs.plugins.kotlin)

@@ -2,7 +2,14 @@ SmartStorage
 ============
 
 SmartStorage is distributed under the GNU Lesser General Public License, version 3.
-The full text is in LICENSE at the root of this project.
+Its text is in LICENSE at the root of this project, and in this jar at
+licenses/LGPL-3.0.txt.
+
+The LGPL-3.0 is not a self-contained licence: it incorporates the terms and conditions
+of version 3 of the GNU General Public License and then adds permissions on top of
+them. That text therefore travels with it — COPYING at the root of the project, and
+licenses/GPL-3.0.txt in this jar. A copy of this addon carrying only the LGPL would be
+carrying half of its own licence.
 
 That is not an arbitrary choice: the cable texture below is a derivative of LGPL-3.0
 material, so the licence travels with it and the project matches rather than fights it.

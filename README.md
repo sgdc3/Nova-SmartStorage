@@ -672,7 +672,13 @@ being duplicated and the log says so.
 
 ## Licence
 
-GNU Lesser General Public License, version 3. The full text is in [LICENSE](LICENSE).
+GNU Lesser General Public License, version 3, in [LICENSE](LICENSE) — with version 3 of the GNU General
+Public License in [COPYING](COPYING) beside it. Both are needed and neither is decoration: the LGPL-3.0
+does not stand alone, it incorporates the GPL's terms and then adds permissions on top, so a copy of this
+project carrying only the LGPL would be carrying half of its own licence.
+
+The released jar carries the same pair at `licenses/`, because the jar is what most people will ever
+have.
 
 That is inherited rather than chosen: the storage cable's texture is derived from Logistics' in
 [xenondevs/Nova-Addons](https://github.com/xenondevs/Nova-Addons), which is LGPL-3.0, so the licence

@@ -40,7 +40,10 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: SmartStorage
-          path: build/libs/SmartStorage-*.jar
+          # Matched on the `+Nova-` that only the addon jar carries, rather than on the leading
+          # `SmartStorage-`: the plain Kotlin jar beside it differs only in case, so that pattern would
+          # pick up both anywhere globbing is case-insensitive.
+          path: build/libs/*+Nova-*.jar
           if-no-files-found: error
 
       # only useful when something went red

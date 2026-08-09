@@ -1,5 +1,5 @@
 group = "it.sgdc3"
-version = "1.0.0"
+version = "1.0.0-beta.1"
 
 plugins {
     alias(libs.plugins.kotlin)

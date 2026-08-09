@@ -13,6 +13,7 @@ import it.sgdc3.smartstorage.storage.Compactions
 import it.sgdc3.smartstorage.storage.ItemType
 import it.sgdc3.smartstorage.storage.StorageLock
 import it.sgdc3.smartstorage.util.RateLimitedError
+import it.sgdc3.smartstorage.util.abbreviate
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Material
@@ -1043,22 +1044,33 @@ class StorageBarrel(
         itemStack.lore(lore)
     }
 
+    /**
+     * Puts the contents on the front: one cell per rung of the ladder, each with its own icon and count.
+     *
+     * A barrel that compacts nothing has one, which is the front it always had. A compacting one has the
+     * densest across the top and the lesser ones beneath — so an iron barrel says *block, ingot, nugget*
+     * in pictures rather than making a player work it out from three bare numbers.
+     *
+     * A barrel holding less than one block leads with ingots rather than "zero blocks", which is what
+     * stopped one with material in it from reading as empty.
+     *
+     * The counts are abbreviated because a block face has room for four characters and eighteen thousand
+     * nuggets is five. The menu is where the exact figure lives.
+     */
     private fun refreshFace() {
         val face = this.face ?: return
 
-        // A compacting barrel holding less than one block is holding ingots, not zero blocks. The front
-        // shows the densest rung that has something on it, so a barrel with material inside never reads
-        // as empty — which is the state it was easiest to unlock, empty out or write off by mistake.
-        val (current, count) = StorageLock.withLock { densities().firstOrNull() ?: (type to amount) }
-
-        if (current == null) {
-            face.update(null, null)
-            return
+        val rungs = StorageLock.withLock {
+            densities().take(EXPOSED_TIERS).ifEmpty { type?.let { listOf(it to amount) } ?: emptyList() }
         }
 
         face.update(
-            current.createStack(1),
-            Component.text(count, if (count > 0L) NamedTextColor.WHITE else NamedTextColor.GRAY)
+            rungs.map { (tier, held) ->
+                FaceCell(
+                    tier.createStack(1),
+                    Component.text(abbreviate(held), if (held > 0L) NamedTextColor.WHITE else NamedTextColor.GRAY)
+                )
+            }
         )
     }
 

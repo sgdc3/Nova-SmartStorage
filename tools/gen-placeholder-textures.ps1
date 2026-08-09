@@ -34,8 +34,14 @@ $glyphs = @{
     droplet    = @('...##...', '..####..', '.######.', '########', '########', '########', '.######.', '..####..')
     # a hole with nothing in it, for the void upgrade
     void       = @('..####..', '.#....#.', '#......#', '#......#', '#......#', '#......#', '.#....#.', '..####..')
+    # four arrows pressing inwards on a small square, for the compacting upgrade: the picture of nine
+    # things becoming one
+    compact    = @('#..####.', '.#.#..#.', '..#....#', '...##...', '...##...', '#....#..', '.#..#.#.', '.####..#')
     # an indicator lamp, lit or dark depending on the accent it is drawn in
     lamp       = @('..####..', '.######.', '########', '########', '########', '########', '.######.', '..####..')
+    # a padlock: shackle, body, keyhole. The same thing stamped on a locked barrel's front, so the
+    # button and the block are recognisably about one idea.
+    padlock    = @('..####..', '.#....#.', '.#....#.', '########', '###..###', '###..###', '########', '.######.')
     # a screen throwing signal, for the wireless terminal
     wireless   = @('#......#', '.#....#.', '..#..#..', '..####..', '..#..#..', '..#..#..', '..####..', '........')
 }
@@ -85,8 +91,14 @@ $textures = @(
     }
     @{ path = 'item\void_upgrade.png'; style = 'panel'; color = @(40, 32, 44); glyph = 'void'; accent = @(210, 90, 200) }
     @{ path = 'item\gui\void_upgrade.png'; style = 'panel'; color = @(40, 32, 44); glyph = 'void'; accent = @(210, 90, 200) }
+    @{ path = 'item\compacting_upgrade.png'; style = 'panel'; color = @(44, 48, 58); glyph = 'compact'; accent = @(150, 200, 255) }
+    @{ path = 'item\gui\compacting_upgrade.png'; style = 'panel'; color = @(44, 48, 58); glyph = 'compact'; accent = @(150, 200, 255) }
     @{ path = 'item\gui\status_online.png'; style = 'panel'; color = @(26, 34, 28); glyph = 'lamp'; accent = @(110, 240, 130) }
     @{ path = 'item\gui\status_offline.png'; style = 'panel'; color = @(34, 26, 26); glyph = 'lamp'; accent = @(120, 60, 60) }
+    # The barrel's lock switch. One shape in two states rather than two shapes, which is the same thing
+    # the lit and dark block models do: a padlock that is on, and the same padlock that is not.
+    @{ path = 'item\gui\lock_on.png'; style = 'panel'; color = @(56, 44, 30); glyph = 'padlock'; accent = @(255, 198, 110) }
+    @{ path = 'item\gui\lock_off.png'; style = 'panel'; color = @(36, 34, 32); glyph = 'padlock'; accent = @(116, 112, 106) }
     # transparent: drawn on top of an empty slot, so only the glyph may be opaque
     @{ path = 'item\gui\placeholder\filter.png'; style = 'glyph'; color = @(0, 0, 0); glyph = 'filter'; accent = @(150, 130, 180) }
 )

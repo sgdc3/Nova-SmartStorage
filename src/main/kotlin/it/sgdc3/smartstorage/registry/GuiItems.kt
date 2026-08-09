@@ -16,6 +16,7 @@ object GuiItems {
      */
     val STORAGE_UPGRADE: NovaItem = guiItem("storage_upgrade")
     val VOID_UPGRADE: NovaItem = guiItem("void_upgrade")
+    val COMPACTING_UPGRADE: NovaItem = guiItem("compacting_upgrade")
 
     /**
      * The lamp on the storage controller's status, which used to be a dye — a stand-in that read as an
@@ -23,6 +24,14 @@ object GuiItems {
      */
     val STATUS_ONLINE: NovaItem = guiItem("status_online")
     val STATUS_OFFLINE: NovaItem = guiItem("status_offline")
+
+    /**
+     * The barrel's lock switch, which is a padlock rather than a coloured button because the block it
+     * governs wears one: locking a barrel stamps a padlock across its front, and the control that does
+     * it should be the same picture.
+     */
+    val LOCK_ON: NovaItem = guiItem("lock_on")
+    val LOCK_OFF: NovaItem = guiItem("lock_off")
 
     /**
      * Placeholders drawn in empty filter slots. Same artwork, different names: an empty slot with no

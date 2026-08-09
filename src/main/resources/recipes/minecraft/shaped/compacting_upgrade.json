@@ -1,0 +1,13 @@
+{
+  "result": "smartstorage:compacting_upgrade",
+  "shape": [
+    "ipi",
+    "pbp",
+    "ipi"
+  ],
+  "ingredients": {
+    "i": "minecraft:iron_ingot",
+    "p": "minecraft:piston",
+    "b": "minecraft:iron_block"
+  }
+}

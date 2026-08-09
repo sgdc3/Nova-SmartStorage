@@ -36,4 +36,17 @@ object UpgradeTypes {
         GuiItems.VOID_UPGRADE
     )
 
+    /**
+     * Makes a barrel hold what it is given in the densest form the server has a recipe for: ingots
+     * become blocks, and nine hundred iron nuggets become eleven blocks and nine nuggets.
+     *
+     * A switch like [VOID], for the same reason — there is no second level of "compacted".
+     */
+    val COMPACTING: UpgradeType<Int> = UpgradeTypeRegistry.registerUpgradeType(
+        SmartStorage,
+        "compacting",
+        Items.COMPACTING_UPGRADE,
+        GuiItems.COMPACTING_UPGRADE
+    )
+
 }

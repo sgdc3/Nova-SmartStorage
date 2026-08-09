@@ -16,3 +16,8 @@ upgrade_values:
   # Whether the barrel burns what it has no room for. A switch, not a scale — the list has two entries,
   # which is also what stops a second Void Upgrade from being installed.
   void: [ 0, 1 ]
+
+  # Whether the barrel keeps what it holds in the densest form the server has a recipe for: ingots
+  # become blocks, nuggets become ingots become blocks. Also a switch — there is no second level of
+  # "compacted" — so the same two entries, and the same limit of one.
+  compacting: [ 0, 1 ]

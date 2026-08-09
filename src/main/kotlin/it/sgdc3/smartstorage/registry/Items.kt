@@ -65,6 +65,12 @@ object Items {
      */
     val VOID_UPGRADE: NovaItem = registerItem("void_upgrade")
 
+    /**
+     * Makes a storage barrel keep what it holds in the densest form the server has a recipe for.
+     * Registered as an upgrade type in [UpgradeTypes].
+     */
+    val COMPACTING_UPGRADE: NovaItem = registerItem("compacting_upgrade")
+
     val STORAGE_CELL_1K: NovaItem = cell("1k")
     val STORAGE_CELL_4K: NovaItem = cell("4k")
     val STORAGE_CELL_16K: NovaItem = cell("16k")

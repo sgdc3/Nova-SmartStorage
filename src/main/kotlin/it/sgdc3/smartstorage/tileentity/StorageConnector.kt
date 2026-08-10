@@ -585,14 +585,22 @@ class StorageConnector(
             get() = barrel.storedAmount
 
         /**
-         * The densest rung only, never all of them: the same iron listed as blocks *and* ingots *and*
-         * nuggets would be counted three times in a network total, which is the one thing an index must
-         * not do. Taking the densest rather than the stored type is what keeps a barrel worn down to a
-         * part of a block from reading as empty — see [StorageBarrel.hasContents].
+         * Every rung, so a terminal can be asked for ingots by a barrel that is holding blocks — the same
+         * thing a pipe can already do through a [BarrelController], and there is no reason a virtual
+         * network should be able to see less than a hopper.
+         *
+         * **These lines are one stock seen three ways and must never be added up.** They are not: the
+         * network's own totals come from
+         * [usedCount][it.sgdc3.smartstorage.network.StorageEndPoint.usedCount], which is per provider and
+         * counts stored items once, while this index feeds only the terminal's list and the slots an
+         * interface offers. Both address a type at a time and both check
+         * [extractableCountOf][it.sgdc3.smartstorage.network.StorageEndPoint.extractableCountOf] live
+         * before handing anything over, so taking nine ingots makes the block line answer smaller on the
+         * next look rather than paying out twice.
          */
         override fun collectInto(index: MutableMap<ItemType, Long>) {
-            val (type, held) = barrel.offers().firstOrNull() ?: return
-            index.merge(type, held) { a, b -> a + b }
+            for ((type, held) in barrel.offers())
+                index.merge(type, held) { a, b -> a + b }
         }
 
         override fun countOf(type: ItemType): Long = barrel.countOf(type)

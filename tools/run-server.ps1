@@ -39,6 +39,15 @@ if (-not $nova) {
 }
 
 if (-not $SkipBuild) {
+    # The jar carries the version in its name, so a version bump leaves the previous one sitting beside
+    # the new one and Nova loads the same addon twice. What that looks like is not "duplicate addon" but
+    # the server dying during registry freeze with a missing Nova config entry, which sends you looking
+    # in entirely the wrong place. Clear ours out first; every other jar here is somebody else's.
+    Get-ChildItem (Join-Path $server 'plugins') -Filter 'SmartStorage-*.jar' | ForEach-Object {
+        Write-Host "Removing previous $($_.Name)" -ForegroundColor DarkGray
+        Remove-Item $_.FullName -Force
+    }
+
     Write-Host 'Building SmartStorage into the test server ...' -ForegroundColor Cyan
     Push-Location $root
     try {

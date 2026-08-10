@@ -364,14 +364,14 @@ class BarrelController(
     }
 
     /**
-     * One line per barrel, at its densest rung — see
-     * [BarrelBacking.collectInto][StorageConnector] for why never more than one.
+     * Every rung of every barrel, the same list the wall's own menu and the item network are given — see
+     * [StorageConnector] for why three lines of one holding are safe in an index and would not be in a
+     * total.
      */
     fun collectInto(index: MutableMap<ItemType, Long>) {
-        for (barrel in barrels) {
-            val (type, held) = barrel.offers().firstOrNull() ?: continue
-            index.merge(type, held) { a, b -> a + b }
-        }
+        for (barrel in barrels)
+            for ((type, held) in barrel.offers())
+                index.merge(type, held) { a, b -> a + b }
     }
 
     /**

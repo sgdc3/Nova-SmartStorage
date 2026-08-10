@@ -435,8 +435,10 @@ class StorageBarrel(
      * which is what the controller's drop-off slot needs to turn an item away before it lands in a slot
      * nothing can then empty. Kept here, next to the insert it mirrors, because two copies of "would
      * this fit" would eventually disagree and the disagreement would be invisible.
+     *
+     * [byHand] is a player acting on *this* barrel — see [insertCounted].
      */
-    fun accepts(candidate: ItemType): Boolean = StorageLock.withLock {
+    fun accepts(candidate: ItemType, byHand: Boolean = false): Boolean = StorageLock.withLock {
         val current = type
         // With a Compacting Upgrade in it the barrel answers for the whole ladder: a barrel of iron
         // blocks is exactly where an iron nugget belongs, and so is one still holding ingots because
@@ -444,8 +446,8 @@ class StorageBarrel(
         val ladder = if (compacts) Compactions.of(candidate) else null
 
         when {
-            // locked onto nothing is locked shut
-            current == null -> !locked && hasRoom
+            // locked onto nothing is shut to everything but a hand
+            current == null -> (byHand || !locked) && hasRoom
             ladder != null -> ladder.unitsOf(current) > 0L && hasRoom
             current != candidate -> false
             else -> hasRoom
@@ -462,8 +464,11 @@ class StorageBarrel(
      * gone: that is what the upgrade is for, and it is the only place in this addon where a returned
      * figure means "dealt with" rather than "kept". It still refuses another type, so a barrel voiding
      * cobblestone cannot swallow somebody's diamonds by being pointed at.
+     *
+     * [byHand] is a player acting on *this* barrel — see [insertCounted].
      */
-    fun insert(candidate: ItemType, count: Long): Long = insertCounted(candidate, count).handled
+    fun insert(candidate: ItemType, count: Long, byHand: Boolean = false): Long =
+        insertCounted(candidate, count, byHand).handled
 
     /**
      * The outcome of an insertion, told apart because with a Void Upgrade the two figures differ.
@@ -484,18 +489,26 @@ class StorageBarrel(
 
     /**
      * [insert], with both figures, computed in one critical section so they cannot disagree.
+     *
+     * [byHand] means a player is putting this in *themselves, into this barrel*: a right-click, its own
+     * drop-off slot, or its own menu. It is not set for anything a machine drives — a pipe, a hopper, or
+     * the wall routing through a [BarrelController], even when a player started that by dropping
+     * something into the controller's slot. The distinction only matters for a barrel locked onto
+     * nothing; see below.
      */
-    private fun insertCounted(candidate: ItemType, count: Long): Inserted {
+    private fun insertCounted(candidate: ItemType, count: Long, byHand: Boolean = false): Inserted {
         // a barrel whose chunk has gone has already written its contents out; anything stored after
         // that is stored into an object nothing will ever read again
         if (count <= 0L || !isEnabled)
             return Inserted.NONE
 
         return StorageLock.withLock {
-            // A barrel locked onto nothing is locked shut. Locking says "this one is for that item",
-            // and with no item named it has named nothing — so taking on the next thing offered would
-            // be the opposite of what the switch was thrown for. Unlock it to open it again.
-            if (type == null && locked)
+            // A barrel locked onto nothing is shut to everything that is not a hand. Locking an empty
+            // barrel reserves it, and the point of reserving it is that the pipe feeding the wall does
+            // not fill it with the first thing that comes along — but a player putting something in is
+            // saying which item it was reserved *for*, which is the only way to name one. So a hand
+            // seeds it and the lock then holds that type; a machine is turned away.
+            if (type == null && locked && !byHand)
                 return@withLock Inserted.NONE
 
             val ladder = if (compacts) Compactions.of(candidate) else null
@@ -1081,7 +1094,9 @@ class StorageBarrel(
 
         val candidate = ItemType.of(stack) ?: return
 
-        val inserted = insertCounted(candidate, stack.amount.toLong())
+        // by hand: somebody put this stack in the barrel's own slot, which is how a barrel locked onto
+        // nothing is told what it is for
+        val inserted = insertCounted(candidate, stack.amount.toLong(), byHand = true)
         if (inserted.handled <= 0L)
             return
 
@@ -1115,7 +1130,7 @@ class StorageBarrel(
         val stored = if (player.isSneaking) {
             depositAll(player, candidate)
         } else {
-            val taken = insert(candidate, held.amount.toLong()).toInt()
+            val taken = insert(candidate, held.amount.toLong(), byHand = true).toInt()
             if (taken > 0) {
                 val left = held.amount - taken
                 player.inventory.setItem(hand, if (left <= 0) null else candidate.createStack(left))
@@ -1148,7 +1163,7 @@ class StorageBarrel(
             if (!candidate.matches(stack))
                 continue
 
-            val taken = insert(candidate, stack.amount.toLong()).toInt()
+            val taken = insert(candidate, stack.amount.toLong(), byHand = true).toInt()
             if (taken <= 0)
                 break
 
@@ -1402,7 +1417,7 @@ class StorageBarrel(
             val candidate = ItemType.of(cursor) ?: return
 
             val offered = if (all) cursor.amount else 1
-            val stored = insert(candidate, offered.toLong()).toInt()
+            val stored = insert(candidate, offered.toLong(), byHand = true).toInt()
             if (stored <= 0)
                 return
 
@@ -1431,8 +1446,8 @@ class StorageBarrel(
             val leftover = player.inventory.addItemCorrectly(current.createStack(taken))
             if (leftover > 0) {
                 // put back what did not fit, and drop whatever the barrel will not take again rather
-                // than deleting it
-                val rejected = leftover - insert(current, leftover.toLong()).toInt()
+                // than deleting it — by hand, since it is going back where it came from
+                val rejected = leftover - insert(current, leftover.toLong(), byHand = true).toInt()
                 if (rejected > 0)
                     player.world.dropItemNaturally(player.location, current.createStack(rejected))
             }

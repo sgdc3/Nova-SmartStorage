@@ -1,7 +1,16 @@
 group = "it.sgdc3"
-// Cut for the v1.0.0-beta.2 tag. main goes back to 1.0.0-SNAPSHOT in the next commit — see it for why
-// the two conventions never appear in one string.
-version = "1.0.0-beta.2"
+// Work towards 1.0.0, and not itself a release. Stays on this number until 1.0.0 itself ships: every
+// beta on the way there is cut from here and comes straight back, which is what the tag v1.0.0-beta.2
+// on the commit below is.
+//
+// Plain -SNAPSHOT rather than a snapshot of a particular beta: semver reads everything after the first
+// hyphen as the pre-release, so "1.0.0-beta.3-SNAPSHOT" is the identifiers `beta` and `3-SNAPSHOT` — the
+// second alphanumeric rather than numeric, which is not a version anybody meant to write. The two
+// conventions do not compose, so main carries one of them and the tag carries the other.
+//
+// Which beta comes next is decided when one is cut, and has to be: the release workflow refuses a tag
+// whose name does not match this line, so tagging means writing the exact version here first.
+version = "1.0.0-SNAPSHOT"
 
 plugins {
     alias(libs.plugins.kotlin)

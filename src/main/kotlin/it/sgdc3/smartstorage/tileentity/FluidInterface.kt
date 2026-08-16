@@ -288,16 +288,18 @@ class FluidInterface(
                 Component.translatable("menu.smartstorage.port.disabled", NamedTextColor.RED)
                     .withoutPreFormatting()
 
+            // "in" is fluid going into the tank on this side and "out" is fluid coming back, which is
+            // Nova's extract and insert in that order — see PortMenu for the flip
             else -> Component.translatable(
                 "menu.smartstorage.port.fluid_directions",
                 NamedTextColor.GRAY,
                 Component.translatable(
-                    if (config.insert) "menu.smartstorage.port.on" else "menu.smartstorage.port.off",
-                    if (config.insert) NamedTextColor.GREEN else NamedTextColor.RED
-                ),
-                Component.translatable(
                     if (config.extract) "menu.smartstorage.port.on" else "menu.smartstorage.port.off",
                     if (config.extract) NamedTextColor.GREEN else NamedTextColor.RED
+                ),
+                Component.translatable(
+                    if (config.insert) "menu.smartstorage.port.on" else "menu.smartstorage.port.off",
+                    if (config.insert) NamedTextColor.GREEN else NamedTextColor.RED
                 )
             ).withoutPreFormatting()
         }
@@ -330,12 +332,22 @@ class FluidInterface(
 
         private val statusItem = ClickableItem({ faceIcon(face) })
 
+        /**
+         * Named from the point of view of the tank on the other side, as the fluid connector names them
+         * and as [StorageInterface] does since the same flip was made there: **Extract draws from it
+         * into the network; Insert sends from the network to it.**
+         *
+         * Nova's words for these two switches run the other way — a connection type says what the fluid
+         * network may do to this end point, so Nova's `insert` is a pipe filling us, which is our
+         * Extract. The fields keep Nova's names because they wrap Nova's config; the flip lives here and
+         * nowhere else.
+         */
         private val insertItem = ClickableItem(
-            { toggleIcon(config().insert, DefaultGuiItems.BLUE_BTN, "menu.smartstorage.port.fluid_insert") },
+            { toggleIcon(config().insert, DefaultGuiItems.ORANGE_BTN, "menu.smartstorage.port.fluid_extract") },
             { _, _, _ -> toggle(insert = true) }
         )
         private val extractItem = ClickableItem(
-            { toggleIcon(config().extract, DefaultGuiItems.ORANGE_BTN, "menu.smartstorage.port.fluid_extract") },
+            { toggleIcon(config().extract, DefaultGuiItems.BLUE_BTN, "menu.smartstorage.port.fluid_insert") },
             { _, _, _ -> toggle(insert = false) }
         )
 

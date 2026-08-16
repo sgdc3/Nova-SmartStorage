@@ -424,16 +424,21 @@ class StorageInterface(
         Component.translatable("menu.smartstorage.face.${face.name.lowercase()}")
     )
 
+    /**
+     * "in" is what goes into the block on this side and "out" is what comes back out of it — which is
+     * Nova's extract and insert in that order, for the reason [PortMenu] gives. The storage connector
+     * prints the same line and needs no flip, because its own flags are already named that way round.
+     */
     private fun directions(key: String, type: NetworkConnectionType): Component = Component.translatable(
         key,
         NamedTextColor.GRAY,
         Component.translatable(
-            if (type.insert) "menu.smartstorage.port.on" else "menu.smartstorage.port.off",
-            if (type.insert) NamedTextColor.GREEN else NamedTextColor.RED
-        ),
-        Component.translatable(
             if (type.extract) "menu.smartstorage.port.on" else "menu.smartstorage.port.off",
             if (type.extract) NamedTextColor.GREEN else NamedTextColor.RED
+        ),
+        Component.translatable(
+            if (type.insert) "menu.smartstorage.port.on" else "menu.smartstorage.port.off",
+            if (type.insert) NamedTextColor.GREEN else NamedTextColor.RED
         )
     ).withoutPreFormatting()
 
@@ -444,8 +449,22 @@ class StorageInterface(
 
         private val statusItem = ClickableItem({ faceIcon(face) })
 
+        /**
+         * The two directions, named the way the rest of this addon names them: from the point of view of
+         * the block on the other side. **Extract takes from it into the network; Insert sends from the
+         * network to it.** That is the storage connector's vocabulary, and a player wiring both should
+         * not have to hold two.
+         *
+         * Nova's words for the same two switches run the other way, and the fields below keep Nova's
+         * because they wrap Nova's maps. A connection type says what the *item network* may do to this
+         * end point, not what the storage network does to its neighbour — so Nova's `insert` is a pipe
+         * pushing into us, which is this addon's Extract, and Nova's `extract` is a pipe pulling out of
+         * us, which is our Insert.
+         *
+         * The whole of that flip lives in these two declarations. Nothing downstream translates again.
+         */
         private val insertItem = ClickableItem(
-            { toggleIcon(itemConfig().insert, DefaultGuiItems.BLUE_BTN, "menu.smartstorage.port.insert") },
+            { toggleIcon(itemConfig().insert, DefaultGuiItems.ORANGE_BTN, "menu.smartstorage.port.extract") },
             { _, _, _ -> toggle(insert = true) }
         )
         private val extractItem = ClickableItem(
@@ -474,8 +493,10 @@ class StorageInterface(
             )
             .addIngredient('n', insertItem)
             .addIngredient('x', extractItem)
-            .addIngredient('a', insertFilterInventory, GuiItems.INSERT_FILTER_PLACEHOLDER)
-            .addIngredient('b', extractFilterInventory, GuiItems.EXTRACT_FILTER_PLACEHOLDER)
+            // each filter sits under the switch it gates, so the placeholders carry this addon's names
+            // rather than Nova's: the one below Extract gates what comes into the network
+            .addIngredient('a', insertFilterInventory, GuiItems.EXTRACT_FILTER_PLACEHOLDER)
+            .addIngredient('b', extractFilterInventory, GuiItems.INSERT_FILTER_PLACEHOLDER)
             .addIngredient('i', statusItem)
             .addIngredient('v', priorityItem)
             .addIngredient('m', RemoveNumberItem({ PRIORITY_RANGE }, { priorityOf(face) }, ::setPriority, "menu.smartstorage.priority_down"))
@@ -596,8 +617,12 @@ class StorageInterface(
         //<editor-fold desc="icons", defaultstate="collapsed">
 
         /**
-         * Nova's own side config colours, because these switches mean exactly what its do: blue for what
-         * goes in, orange for what comes out, grey for a direction that is closed.
+         * Blue for Insert, orange for Extract, grey for a direction that is closed — the storage
+         * connector's colours, so one switch is one colour wherever a player meets it.
+         *
+         * Which is the opposite way round from Nova's own side config, and deliberately so: it pairs the
+         * colour with the word beside it rather than with Nova's word for the flag underneath. The
+         * caller passes both.
          */
         private fun toggleIcon(on: Boolean, onItem: NovaItem, key: String): ItemBuilder =
             (if (on) onItem else DefaultGuiItems.GRAY_BTN).createClientsideItemBuilder().setName(
@@ -610,9 +635,11 @@ class StorageInterface(
 
         /**
          * The one switch that can refuse to move, so it is the one that has to say why.
+         *
+         * Nova's extract, which this addon calls Insert — see the two declarations above.
          */
         private fun extractIcon(): ItemBuilder {
-            val builder = toggleIcon(itemConfig().extract, DefaultGuiItems.ORANGE_BTN, "menu.smartstorage.port.extract")
+            val builder = toggleIcon(itemConfig().extract, DefaultGuiItems.BLUE_BTN, "menu.smartstorage.port.insert")
             if (itemHolder.extractFilters[face] == null) {
                 builder.addLoreLines(
                     Component.translatable("menu.smartstorage.port.needs_filter", NamedTextColor.RED)

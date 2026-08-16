@@ -249,6 +249,15 @@ class StorageInterface(
 
         val ports = HashSet<BlockFace>()
         collectPorts(connected.row(ITEM), itemHolder.connectionConfig, ports)
+        // A side that already carries an arm is a side that is talking on the storage network, and that
+        // is the whole conversation: another interface pressed against this one is a neighbouring *node*,
+        // the way a cable is, not a container to bolt a nozzle onto. Nova joins any two nodes that touch,
+        // so the two are one network already — see NetworkView.canExchangeItemsWith, which is what keeps
+        // them from also trading items with each other through Nova's.
+        //
+        // Cables never reached here at all, being bridges rather than end points. This says the same
+        // thing about the blocks that are both.
+        ports -= arms
 
         attachedFaces = neighbours(state)
         servedFaces = ports

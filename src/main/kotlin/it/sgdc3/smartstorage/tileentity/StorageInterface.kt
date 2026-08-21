@@ -15,6 +15,7 @@ import it.sgdc3.smartstorage.registry.GuiItems
 import it.sgdc3.smartstorage.registry.GuiTextures
 import it.sgdc3.smartstorage.registry.Models
 import it.sgdc3.smartstorage.registry.NetworkTypes
+import it.sgdc3.smartstorage.storage.ItemType
 import it.sgdc3.smartstorage.util.getItemFilter
 import it.sgdc3.smartstorage.util.isItemFilter
 import net.kyori.adventure.text.Component
@@ -138,7 +139,7 @@ class StorageInterface(
     private val input = TransferBudget()
     private val output = TransferBudget()
 
-    private val networkView = NetworkView(this, uuid, EXPOSED_SLOTS, input, output)
+    private val networkView = NetworkView(this, uuid, EXPOSED_SLOTS, input, output, ::wantedOut)
     private val itemHolder = storedItemHolder(networkView to NetworkConnectionType.BUFFER)
 
     /**
@@ -350,6 +351,33 @@ class StorageInterface(
     }
 
     private fun portMenu(face: BlockFace): PortMenu = portMenus.getOrPut(face) { PortMenu(face) }
+
+    /**
+     * Whether any side that is currently handing items out would let [type] past its filter.
+     *
+     * The interface exposes a window onto a system far larger than it, and this is how the window knows
+     * what to show — see [NetworkView.copyContents]. It decides nothing about what may actually leave:
+     * Nova applies each face's filter itself, and a second copy of that rule here would be a second rule
+     * to keep in step.
+     *
+     * A side with no filter wants everything, so it answers for every type at once. When nothing is
+     * handing items out at all there is nothing to prefer, and everything ranks alike.
+     */
+    private fun wantedOut(type: ItemType): Boolean {
+        var handingOut = false
+
+        for (face in CUBE_FACES) {
+            if (itemHolder.connectionConfig[face]?.extract != true)
+                continue
+
+            handingOut = true
+            val filter = itemHolder.extractFilters[face] ?: return true
+            if (filter.allows(type.stack))
+                return true
+        }
+
+        return !handingOut
+    }
 
     /**
      * How much this interface moves per network tick at its current speed.

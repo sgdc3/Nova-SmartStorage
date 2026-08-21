@@ -39,7 +39,15 @@ class NetworkView internal constructor(
      * [TransferBudget] for why a shared pool would let one direction spend what the other promised.
      */
     private val input: TransferBudget,
-    private val output: TransferBudget
+    private val output: TransferBudget,
+    /**
+     * Whether some side that is currently handing items out would let this type past its filter.
+     *
+     * Only ever consulted to decide *what to offer*, never whether to hand anything over — Nova applies
+     * the real filters itself, per face, and doing it twice would be two rules to keep in step. See
+     * [copyContents] for why the offer has to know.
+     */
+    private val wantedOut: (ItemType) -> Boolean = { true }
 ) : NetworkedInventory {
 
     /**
@@ -140,8 +148,43 @@ class NetworkView internal constructor(
             // addresses slots by index for the rest of it
             // the extractable view, for the same reason canTake uses it: a slot in this snapshot is an
             // offer, and offering something the network will refuse to hand over is how items get made
+            // Ordered by what the sides have asked for first, and only then by how much there is.
+            //
+            // There are [size] slots and a storage system holds far more types than that, so this is a
+            // window onto it — and Nova applies a face's extract filter to the window *after* it is
+            // taken. A window chosen by sheer quantity therefore silently defeats every whitelist for
+            // something that is not among the most numerous: the item never appears, the filter has
+            // nothing to pass, and the side moves nothing while a blacklist on the same side works
+            // perfectly. Asking what the filters want turns that around — a side told exactly what may
+            // go is a side asking for something specific, and it is the one thing that must be in the
+            // window.
+            //
+            // Quantity still decides the rest, which is what bulk export wants, and a blacklist is
+            // unaffected: it wants nearly everything, so nearly everything ranks alike and the order is
+            // the one it always was.
             val entries = network.extractableSnapshot().entries
-                .sortedWith(compareByDescending<Map.Entry<ItemType, Long>> { it.value }.thenBy { it.key.stack.type.name })
+                .map { wantedOut(it.key) to it }
+                .sortedWith(
+                    compareByDescending<Pair<Boolean, Map.Entry<ItemType, Long>>> { it.first }
+                        .thenByDescending { it.second.value }
+                        .thenBy { it.second.key.stack.type.name }
+                )
+                .map { it.second }
+
+            // No slot offers more than this tick's allowance, and that is not a nicety — it is the only
+            // place the rate can be applied on the way out.
+            //
+            // [canTake] is a promise and the distributor asks it all or nothing: it works out one figure
+            // — the smaller of what the slot shows and what its cables will carry — and either takes
+            // exactly that or moves on. A slot showing a full stack against a budget of eight is
+            // therefore a slot asked for sixty-four and refused, every tick, forever. Worst where it
+            // matters most: an interface bolted straight onto a chest has no cable for Nova to take a
+            // rate from, so the figure it asks for is simply the stack.
+            //
+            // Insertion never had this because [add] answers with the leftover, so a budget smaller than
+            // the offer is a partial transfer rather than no transfer. Out here, the offer has to be the
+            // small number.
+            val budget = output.available()
 
             for (i in 0..<size) {
                 val entry = entries.getOrNull(i)
@@ -150,8 +193,14 @@ class NetworkView internal constructor(
                     continue
                 }
 
+                val offered = minOf(entry.value, entry.key.maxStackSize.toLong(), budget)
+                if (offered <= 0L) {
+                    destination[i] = ItemStack.empty()
+                    continue
+                }
+
                 types[i] = entry.key
-                destination[i] = entry.key.createStack(minOf(entry.value, entry.key.maxStackSize.toLong()).toInt())
+                destination[i] = entry.key.createStack(offered.toInt())
             }
         } else {
             for (i in 0..<size)

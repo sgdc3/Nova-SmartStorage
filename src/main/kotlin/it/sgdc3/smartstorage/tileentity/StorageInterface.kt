@@ -610,6 +610,20 @@ class StorageInterface(
                 val filters = if (extract) itemHolder.extractFilters else itemHolder.insertFilters
                 if (filter == null) filters.remove(face) else filters[face] = filter
 
+                // A filter put in is the side being told what may go, which is the one thing extraction
+                // was waiting for — so it opens here rather than waiting to be switched on a second time.
+                //
+                // Without this the natural order leaves the side shut and looking configured. Pressing
+                // the switch is what a player does *before* going to fetch a filter, and
+                // enforceExtractFilters undoes that press as it happens; the filter then goes into a slot
+                // whose switch has already sprung back, and neither action has opened anything. The only
+                // sequence that worked was filter first, switch second.
+                if (extract && filter != null) {
+                    val current = itemConfig()
+                    if (!current.extract)
+                        itemHolder.connectionConfig[face] = NetworkConnectionType.of(current.insert, true)
+                }
+
                 // taking an extract filter out closes the side, on both networks
                 enforceExtractFilters()
 

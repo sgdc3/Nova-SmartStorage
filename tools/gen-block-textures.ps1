@@ -292,6 +292,59 @@ $textures = @(
         )
     }
     @{
+        # The nozzle the valve wears towards a machine. It is there whether or not that side is being
+        # fed: what it says is "there is a machine here", and whether power is going through is the
+        # core's job to say. Same flange as the other hubs so the family reads as one, in the valve's
+        # amber, and with the dark twin the off variant needs.
+        name = 'energy_valve_port'
+        palette = @{ '2' = @(232, 178, 96) }
+        off = $true
+        rows = @(
+            '................',
+            '................',
+            '..dddddddddddd..',
+            '..db........bd..',
+            '..d.dddddddd.d..',
+            '..d.dkk22kkd.d..',
+            '..d.dkkkkkkd.d..',
+            '..d.d2kkkk2d.d..',
+            '..d.d2kkkk2d.d..',
+            '..d.dkkkkkkd.d..',
+            '..d.dkk22kkd.d..',
+            '..d.dddddddd.d..',
+            '..db........bd..',
+            '..dddddddddddd..',
+            '................',
+            '................'
+        )
+    }
+    @{
+        # A handwheel, drawn in the middle 8x8 because this is a hub core and that is all its model
+        # samples. Lit while power is passing, dark the moment the machine it watches has nowhere to put
+        # its output.
+        name = 'energy_valve'
+        palette = @{ '1' = @(120, 78, 42); '2' = @(232, 178, 96); '3' = @(255, 232, 176) }
+        off = $true
+        rows = @(
+            '................',
+            '................',
+            '................',
+            '................',
+            '....dddddddd....',
+            '....dk2222kd....',
+            '....d23kk32d....',
+            '....d2k33k2d....',
+            '....d2k33k2d....',
+            '....d23kk32d....',
+            '....dk2222kd....',
+            '....dddddddd....',
+            '................',
+            '................',
+            '................',
+            '................'
+        )
+    }
+    @{
         # A terminal listing what the wall holds — the same screen and button row the storage terminal
         # has, because that is what the block does — but rendered warm instead of cold.
         #

@@ -1,0 +1,20 @@
+# Energy buffer of the valve.
+#
+# Small on purpose: this is a tap, not a battery. It needs enough to keep the machine behind it fed
+# between two network ticks and no more, because whatever is in here when the valve shuts is stranded
+# until it opens again.
+max_energy: 5000
+
+# Ticks between two looks at *where* the machines are.
+#
+# Not how often the valve reacts: whether their output is full is checked every tick, against the
+# buffers found by this scan, because a fast machine gets a lot done in a second — a block breaker with
+# every speed upgrade fitted breaks sixteen blocks. What that costs is one check per buffer per tick.
+#
+# This is the other half, and it is the expensive one: finding which sides have a machine at all means
+# walking the network state on its own thread. It only changes when somebody builds something.
+watch_ticks: 20
+
+upgrade_values:
+  # Energy buffer multiplier per Energy Upgrade, the same ladder the storage controller uses.
+  energy: [ 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6 ]

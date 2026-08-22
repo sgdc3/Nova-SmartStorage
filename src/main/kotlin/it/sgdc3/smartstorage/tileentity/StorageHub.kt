@@ -47,9 +47,12 @@ abstract class StorageHub(
      * The hidden items whose models a port is drawn with, lit and dark, from
      * [it.sgdc3.smartstorage.registry.Models]. A display entity carries one model and cannot pick a
      * texture, so the two states are two items.
+     *
+     * Null for a hub that mounts onto nothing — a valve in a cable run has arms and no ports, and
+     * inventing an attachment it never draws would be a worse answer than saying it has none.
      */
-    protected abstract val portModel: NovaItem
-    protected abstract val portModelOff: NovaItem
+    protected open val portModel: NovaItem? = null
+    protected open val portModelOff: NovaItem? = null
 
     private val multiModel = FixedMultiModel()
     private var portFaces: Set<BlockFace> = emptySet()
@@ -176,11 +179,30 @@ abstract class StorageHub(
         return true
     }
 
-    private fun applyPortModels() {
-        val item = if (powered) portModel else portModelOff
+    /**
+     * The model to draw on [face], or null to draw none.
+     *
+     * Defaults to the lit or dark [portModel] according to whether the hub as a whole is running, which
+     * is what a connector and an interface want: their ports are all alike because the thing that varies
+     * is the hub. A valve overrides it, because its sides are decided one at a time.
+     */
+    protected open fun portModelFor(face: BlockFace): NovaItem? =
+        if (powered) portModel else portModelOff
 
+    /**
+     * Redraws the ports without anything else having changed.
+     *
+     * [setPowered] and [setPortFaces] already do it when they change something, and for the other hubs
+     * that is every occasion there is. It is not for a hub whose ports differ from each other: the set of
+     * sides can stay the same, and the hub stay lit, while which of those sides is being served changes.
+     */
+    protected fun refreshPortModels() = applyPortModels()
+
+    private fun applyPortModels() {
         multiModel.replaceModels(
-            portFaces.mapTo(HashSet()) { face ->
+            portFaces.mapNotNullTo(HashSet()) { face ->
+                val item = portModelFor(face) ?: return@mapNotNullTo null
+
                 Model(
                     item.createClientsideItemBuilder().get(),
                     pos.location.add(0.5, 0.5, 0.5),

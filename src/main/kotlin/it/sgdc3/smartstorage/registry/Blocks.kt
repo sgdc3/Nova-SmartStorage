@@ -6,6 +6,7 @@ import it.sgdc3.smartstorage.SmartStorage.tileEntity
 import it.sgdc3.smartstorage.tileentity.BarrelController
 import it.sgdc3.smartstorage.tileentity.CraftingTerminal
 import it.sgdc3.smartstorage.tileentity.DriveBay
+import it.sgdc3.smartstorage.tileentity.EnergyValve
 import it.sgdc3.smartstorage.tileentity.FluidConnector
 import it.sgdc3.smartstorage.tileentity.FluidInterface
 import it.sgdc3.smartstorage.tileentity.FluidTerminal
@@ -111,6 +112,13 @@ object Blocks {
 
     val STORAGE_CONTROLLER: NovaTileEntityBlock = device("storage_controller", ::StorageController)
 
+    /**
+     * A tap in a cable run rather than a block beside one, so it is a hub: a core with an arm towards
+     * every side it carries power to. It has no ports — there is nothing to mount it onto — which is
+     * the one way it differs from the connector and the interface.
+     */
+    val ENERGY_VALVE: NovaTileEntityBlock = hub("energy_valve", "energy_valve", ::EnergyValve, armsInModel = false)
+
     val DRIVE_BAY: NovaTileEntityBlock = facingDevice("drive_bay", ::DriveBay)
     val STORAGE_TERMINAL: NovaTileEntityBlock = facingDevice("storage_terminal", ::StorageTerminal)
     val CRAFTING_TERMINAL: NovaTileEntityBlock = facingDevice("crafting_terminal", ::CraftingTerminal)
@@ -199,7 +207,21 @@ object Blocks {
      * cube — it comes from the backing state, and no inert vanilla state is shaped like a core with
      * arms. Nova's own Machines addon makes the same trade for its solar panel.
      */
-    private fun hub(name: String, models: String, constructor: TileEntityConstructor): NovaTileEntityBlock =
+    private fun hub(
+        name: String,
+        models: String,
+        constructor: TileEntityConstructor,
+        /**
+         * Whether the arms are part of the block model.
+         *
+         * False for a hub that draws them as display entities instead, which is what the energy valve
+         * does so that each arm can carry the colour of the pipe it touches — a colour per face is not
+         * something six booleans can say. Such a hub still *declares* the six, because they are what
+         * lays the chain behind the model and decides its collider; only the picture ignores them, and
+         * one core model then serves all sixty-four combinations.
+         */
+        armsInModel: Boolean = true
+    ): NovaTileEntityBlock =
         tileEntity(name, constructor) {
             behaviors(TileEntityLimited, TileEntityDrops, TileEntityInteractive, DEVICE, BlockSounds(SoundGroup.METAL))
             stateProperties(
@@ -241,6 +263,11 @@ object Blocks {
                     else -> MojangBlocks.STRUCTURE_VOID.defaultBlockState()
                 }
             }, {
+                if (!armsInModel) {
+                    val lit = if (getPropertyValueOrThrow(BlockStateProperties.POWERED)) "" else "_off"
+                    return@entityBacked getModel("block/$models/core$lit")
+                }
+
                 val id = encodeFlags(
                     getPropertyValueOrThrow(BlockStateProperties.NORTH),
                     getPropertyValueOrThrow(BlockStateProperties.EAST),

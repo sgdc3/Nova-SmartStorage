@@ -11,6 +11,7 @@
   "block.smartstorage.storage_connector": "Connettore Contenitori",
   "block.smartstorage.wireless_access_point": "Punto di Accesso Wireless",
   "block.smartstorage.storage_barrel": "Barile di Stoccaggio",
+  "block.smartstorage.energy_valve": "Valvola Energetica",
   "block.smartstorage.barrel_controller": "Controller Barili",
 
   "item.smartstorage.storage_upgrade": "Upgrade Capacità",

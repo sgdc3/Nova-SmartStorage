@@ -1,0 +1,14 @@
+{
+  "result": "smartstorage:energy_valve",
+  "shape": [
+    "iri",
+    "cpc",
+    "iri"
+  ],
+  "ingredients": {
+    "i": "minecraft:iron_ingot",
+    "r": "minecraft:redstone",
+    "c": "minecraft:comparator",
+    "p": "minecraft:piston"
+  }
+}

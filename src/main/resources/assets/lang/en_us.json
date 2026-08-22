@@ -11,6 +11,7 @@
   "block.smartstorage.storage_connector": "Storage Connector",
   "block.smartstorage.wireless_access_point": "Wireless Access Point",
   "block.smartstorage.storage_barrel": "Storage Barrel",
+  "block.smartstorage.energy_valve": "Energy Valve",
   "block.smartstorage.barrel_controller": "Barrel Controller",
 
   "item.smartstorage.storage_upgrade": "Storage Upgrade",

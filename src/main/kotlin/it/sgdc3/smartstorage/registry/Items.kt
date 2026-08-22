@@ -54,6 +54,10 @@ object Items {
         modelDefinition { model = buildModel { getModel("item/fluid_connector") } }
     }
 
+    val ENERGY_VALVE: NovaItem = item(Blocks.ENERGY_VALVE) {
+        modelDefinition { model = buildModel { getModel("item/energy_valve") } }
+    }
+
     /**
      * Adds disk slots to a drive bay. Registered as a Simple-Upgrades upgrade type in [UpgradeTypes].
      */

@@ -38,6 +38,9 @@ $hubs = @(
     # the fluid pair: same geometry, same UVs, different core and port textures - see gen-block-textures
     @{ name = 'fluid_connector'; core = 'smartstorage:block/fluid_connector'; port = 'smartstorage:block/fluid_connector_port' }
     @{ name = 'fluid_interface'; core = 'smartstorage:block/fluid_interface'; port = 'smartstorage:block/fluid_interface_port' }
+    # The valve's "port" is not a mount on a container: it is the cap it puts over a side it has shut.
+    # Same geometry as the others, which is why it lives here — a flange on one face, drawn by a display
+    # entity, appearing and vanishing without a block state.
 )
 
 # Every family below is written twice, lit and dark, because a hub the controller is not powering should
@@ -119,6 +122,8 @@ function Write-Model([string] $path, $textures, $elements) {
 }
 
 foreach ($hub in $hubs) {
+    # every hub wears the storage cable's arms unless it asks for its own
+    $arm = if ($hub.ContainsKey('arm')) { $hub.arm } else { $TEX_CABLE }
     $blockDir = Join-Path $modelsDir "block\$($hub.name)"
     New-Item -ItemType Directory -Force $blockDir | Out-Null
     New-Item -ItemType Directory -Force (Join-Path $blockDir 'off') | Out-Null
@@ -127,7 +132,7 @@ foreach ($hub in $hubs) {
         $core = "$($hub.core)$($variant.texture)"
         $port = "$($hub.port)$($variant.texture)"
 
-        $coreTextures = [ordered]@{ particle = '#1'; '0' = $TEX_CABLE; '1' = $core }
+        $coreTextures = [ordered]@{ particle = '#1'; '0' = $arm; '1' = $core }
         $portTextures = [ordered]@{ particle = '#2'; '2' = $TEX_CASING; '3' = $port }
 
         for ($id = 0; $id -lt 64; $id++) {
@@ -153,5 +158,57 @@ foreach ($hub in $hubs) {
 
     Write-Host "  $($hub.name): 128 models, 2 attachments, item"
 }
+
+# The energy valve, which is a hub with the arms taken out of the block model.
+#
+# Its arms carry the colour of whatever pipe they touch, decided one face at a time, and a colour per
+# face cannot be block state: six faces over five tiers is five to the sixth. So they are display
+# entities like the ports, one model per tier, authored pointing south and turned by the entity — and
+# what is left in the block model is the core, which is two files instead of a hundred and twenty-eight.
+#
+# The tier textures belong to Logistics. Referencing them is safe with Logistics absent, because the
+# valve only ever asks for one after finding one of its cables: no cable, no reference, no missing
+# texture. `plain` is the fallback, and is this addon's own.
+$valveArms = [ordered]@{
+    plain     = 'smartstorage:block/cable'
+    basic     = 'logistics:block/cable/basic'
+    advanced  = 'logistics:block/cable/advanced'
+    elite     = 'logistics:block/cable/elite'
+    ultimate  = 'logistics:block/cable/ultimate'
+    creative  = 'logistics:block/cable/creative'
+}
+
+$valveDir = Join-Path $modelsDir 'block\energy_valve'
+New-Item -ItemType Directory -Force $valveDir | Out-Null
+New-Item -ItemType Directory -Force (Join-Path $valveDir 'arm') | Out-Null
+
+$valveCore = 'smartstorage:block/energy_valve'
+$valvePort = 'smartstorage:block/energy_valve_port'
+
+foreach ($variant in $variants) {
+    $suffix = if ($variant.suffix -eq '') { '' } else { '_off' }
+
+    Write-Model (Join-Path $valveDir "core$suffix.json") `
+        ([ordered]@{ particle = '#1'; '1' = "$valveCore$($variant.texture)" }) `
+        (@(New-Core))
+
+    Write-Model (Join-Path $valveDir "attachment$suffix.json") `
+        ([ordered]@{ particle = '#2'; '2' = $TEX_CASING; '3' = "$valvePort$($variant.texture)" }) `
+        (New-Port)
+}
+
+# The south arm, which is the one a display entity turns onto every other face.
+foreach ($tier in $valveArms.Keys) {
+    Write-Model (Join-Path $valveDir "arm\$tier.json") `
+        ([ordered]@{ particle = '#0'; '0' = $valveArms[$tier] }) `
+        (@(New-Arm $arms[2]))
+}
+
+# what you hold is always lit
+Write-Model (Join-Path $itemDir 'energy_valve.json') `
+    ([ordered]@{ particle = '#1'; '1' = $valveCore; '2' = $TEX_CASING; '3' = $valvePort }) `
+    (@(New-Core) + (New-Port))
+
+Write-Host "  energy_valve: 2 cores, 2 attachments, $($valveArms.Count) arms, item"
 
 Write-Host "Generated the hub models in $modelsDir" -ForegroundColor Green

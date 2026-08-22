@@ -54,6 +54,22 @@ abstract class StorageHub(
     protected open val portModel: NovaItem? = null
     protected open val portModelOff: NovaItem? = null
 
+    /**
+     * The hub's own core, lit and dark, when it is drawn as a display entity rather than as part of the
+     * block model.
+     *
+     * Null leaves it to the block model, which is what the energy valve does — its arms are the entities
+     * and its core is the one thing left in the model.
+     *
+     * The others go the other way, and the saving is the reason. A hub's arms are the same shape as a
+     * cable's, deliberately and to the unit, and its core is an eight-cube that swallows the cable's
+     * four-cube whole. So a hub can simply *be* a cable as far as the block model is concerned, and wear
+     * its own core on top — which is sixty-four models shared between five blocks instead of a hundred
+     * and twenty-eight apiece.
+     */
+    protected open val coreModel: NovaItem? = null
+    protected open val coreModelOff: NovaItem? = null
+
     private val multiModel = FixedMultiModel()
     private var portFaces: Set<BlockFace> = emptySet()
     private var armFaces: Set<BlockFace> = emptySet()
@@ -67,13 +83,16 @@ abstract class StorageHub(
         armFaces = armFacesFromBlockState()
         powered = blockState[BlockStateProperties.POWERED] == true
         rebuildHitboxes()
+        // A hub whose core is a display entity has nothing to show until this runs, and a hub with no
+        // ports would otherwise wait for a network update that has no reason to come.
+        applyPortModels()
     }
 
     /**
      * Lights the core and the ports, or puts them out. Main thread only: it swaps display entities.
      *
-     * The core is block state and the ports are display entities, so one switch has to reach two
-     * different mechanisms — which is the same split the arms and the ports already live on.
+     * One switch, two mechanisms, because a hub's core is block state for some and a display entity for
+     * others — see [coreModel]. It reaches both rather than asking which kind this is.
      *
      * @return whether anything changed, so a caller can redraw the menu that says the same thing.
      */
@@ -199,8 +218,7 @@ abstract class StorageHub(
     protected fun refreshPortModels() = applyPortModels()
 
     private fun applyPortModels() {
-        multiModel.replaceModels(
-            portFaces.mapNotNullTo(HashSet()) { face ->
+        val models = portFaces.mapNotNullTo(HashSet<Model>()) { face ->
                 val item = portModelFor(face) ?: return@mapNotNullTo null
 
                 Model(
@@ -214,7 +232,13 @@ abstract class StorageHub(
                         .rotateX(Math.toRadians(-face.pitch.toDouble()).toFloat())
                 )
             }
-        )
+
+        // unrotated: a core is a cube in the middle and looks the same whichever way it is turned
+        (if (powered) coreModel else coreModelOff)?.let { core ->
+            models += Model(core.createClientsideItemBuilder().get(), pos.location.add(0.5, 0.5, 0.5))
+        }
+
+        multiModel.replaceModels(models)
     }
 
     //</editor-fold>

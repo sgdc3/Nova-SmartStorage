@@ -73,6 +73,32 @@ object Models {
                 }
             }
 
+    /**
+     * The cores the four storage-network hubs wear, now that their block model is the cable's.
+     *
+     * A hub's arms are the cable's arms to the unit, and its core is an eight-cube that hides the
+     * cable's four-cube inside it — so the block model can be `block/cable/<id>` and the core can ride on
+     * top as a display entity. Sixty-four models serve five blocks where each used to carry a hundred and
+     * twenty-eight of its own.
+     */
+    val CONNECTOR_CORE: NovaItem = core("connector", lit = true)
+    val INTERFACE_CORE: NovaItem = core("interface", lit = true)
+    val FLUID_CONNECTOR_CORE: NovaItem = core("fluid_connector", lit = true)
+    val FLUID_INTERFACE_CORE: NovaItem = core("fluid_interface", lit = true)
+
+    val CONNECTOR_CORE_OFF: NovaItem = core("connector", lit = false)
+    val INTERFACE_CORE_OFF: NovaItem = core("interface", lit = false)
+    val FLUID_CONNECTOR_CORE_OFF: NovaItem = core("fluid_connector", lit = false)
+    val FLUID_INTERFACE_CORE_OFF: NovaItem = core("fluid_interface", lit = false)
+
+    private fun core(hub: String, lit: Boolean): NovaItem {
+        val path = if (lit) "core" else "core_off"
+        return item(if (lit) "${hub}_core" else "${hub}_core_off") {
+            hidden(true)
+            modelDefinition { model = buildModel { getModel("block/$hub/$path") } }
+        }
+    }
+
     private fun port(hub: String, lit: Boolean): NovaItem {
         val path = if (lit) "attachment" else "attachment_off"
         return item(if (lit) "${hub}_attachment" else "${hub}_attachment_off") {

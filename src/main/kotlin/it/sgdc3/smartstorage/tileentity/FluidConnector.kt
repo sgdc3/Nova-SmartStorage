@@ -70,6 +70,9 @@ class FluidConnector(
     override val portModel = Models.FLUID_CONNECTOR_ATTACHMENT
     override val portModelOff = Models.FLUID_CONNECTOR_ATTACHMENT_OFF
 
+    override val coreModel = Models.FLUID_CONNECTOR_CORE
+    override val coreModelOff = Models.FLUID_CONNECTOR_CORE_OFF
+
     override val storageHolder = StorageHolder(this)
 
     @Volatile

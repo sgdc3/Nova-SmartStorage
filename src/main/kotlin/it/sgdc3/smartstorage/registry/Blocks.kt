@@ -117,7 +117,7 @@ object Blocks {
      * every side it carries power to. It has no ports — there is nothing to mount it onto — which is
      * the one way it differs from the connector and the interface.
      */
-    val ENERGY_VALVE: NovaTileEntityBlock = hub("energy_valve", "energy_valve", ::EnergyValve, armsInModel = false)
+    val ENERGY_VALVE: NovaTileEntityBlock = hub("energy_valve", ::EnergyValve, coreModels = "energy_valve")
 
     val DRIVE_BAY: NovaTileEntityBlock = facingDevice("drive_bay", ::DriveBay)
     val STORAGE_TERMINAL: NovaTileEntityBlock = facingDevice("storage_terminal", ::StorageTerminal)
@@ -147,12 +147,12 @@ object Blocks {
 
     val WIRELESS_ACCESS_POINT: NovaTileEntityBlock = device("wireless_access_point", ::WirelessAccessPoint)
 
-    val STORAGE_INTERFACE: NovaTileEntityBlock = hub("storage_interface", "interface", ::StorageInterface)
-    val STORAGE_CONNECTOR: NovaTileEntityBlock = hub("storage_connector", "connector", ::StorageConnector)
+    val STORAGE_INTERFACE: NovaTileEntityBlock = hub("storage_interface", ::StorageInterface)
+    val STORAGE_CONNECTOR: NovaTileEntityBlock = hub("storage_connector", ::StorageConnector)
 
     // the same two blocks for fluids: same shape, same six live sides, different thing flowing through
-    val FLUID_INTERFACE: NovaTileEntityBlock = hub("fluid_interface", "fluid_interface", ::FluidInterface)
-    val FLUID_CONNECTOR: NovaTileEntityBlock = hub("fluid_connector", "fluid_connector", ::FluidConnector)
+    val FLUID_INTERFACE: NovaTileEntityBlock = hub("fluid_interface", ::FluidInterface)
+    val FLUID_CONNECTOR: NovaTileEntityBlock = hub("fluid_connector", ::FluidConnector)
 
     /**
      * The name of the model a device wears right now: the lit one, or the dark twin.
@@ -209,18 +209,17 @@ object Blocks {
      */
     private fun hub(
         name: String,
-        models: String,
         constructor: TileEntityConstructor,
         /**
-         * Whether the arms are part of the block model.
+         * The model folder of a hub that keeps its core in the block model, for one whose *arms* are the
+         * display entities instead — which is what the energy valve does, so that each arm can carry the
+         * colour of the pipe it touches. A colour per face is not something six booleans can say.
          *
-         * False for a hub that draws them as display entities instead, which is what the energy valve
-         * does so that each arm can carry the colour of the pipe it touches — a colour per face is not
-         * something six booleans can say. Such a hub still *declares* the six, because they are what
-         * lays the chain behind the model and decides its collider; only the picture ignores them, and
-         * one core model then serves all sixty-four combinations.
+         * Null is the ordinary kind, which is the other way round: the cable's models for the arms and a
+         * core worn on top. Either way the six are still declared, because they are what lays the chain
+         * behind the model and decides its collider — only the picture ignores them.
          */
-        armsInModel: Boolean = true
+        coreModels: String? = null
     ): NovaTileEntityBlock =
         tileEntity(name, constructor) {
             behaviors(TileEntityLimited, TileEntityDrops, TileEntityInteractive, DEVICE, BlockSounds(SoundGroup.METAL))
@@ -263,9 +262,9 @@ object Blocks {
                     else -> MojangBlocks.STRUCTURE_VOID.defaultBlockState()
                 }
             }, {
-                if (!armsInModel) {
+                if (coreModels != null) {
                     val lit = if (getPropertyValueOrThrow(BlockStateProperties.POWERED)) "" else "_off"
-                    return@entityBacked getModel("block/$models/core$lit")
+                    return@entityBacked getModel("block/$coreModels/core$lit")
                 }
 
                 val id = encodeFlags(
@@ -277,10 +276,12 @@ object Blocks {
                     getPropertyValueOrThrow(BlockStateProperties.DOWN)
                 )
 
-                // a whole second set of 64, dark. The arms are the same shape either way; only the core
-                // texture differs, and a model cannot pick a texture at runtime
-                val lit = if (getPropertyValueOrThrow(BlockStateProperties.POWERED)) "" else "off/"
-                getModel("block/$models/$lit$id")
+                // The cable's own models, not a set of our own. A hub's arms are a cable's arms to the
+                // unit and its core is an eight-cube that hides the cable's four-cube whole, so the only
+                // thing a hub needed its own six hundred and fifty files for was a core it can wear on
+                // top instead — see StorageHub.coreModel. Unlit is that core's business too, which is
+                // why nothing here reads POWERED any more.
+                getModel("block/cable/$id")
             })
         }
 

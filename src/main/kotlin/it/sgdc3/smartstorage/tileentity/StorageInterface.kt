@@ -121,6 +121,9 @@ class StorageInterface(
     override val portModel = Models.INTERFACE_ATTACHMENT
     override val portModelOff = Models.INTERFACE_ATTACHMENT_OFF
 
+    override val coreModel = Models.INTERFACE_CORE
+    override val coreModelOff = Models.INTERFACE_CORE_OFF
+
     override val storageHolder = StorageHolder(this)
 
     @Volatile

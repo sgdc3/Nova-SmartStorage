@@ -4,12 +4,15 @@
 #
 # Three families come out of here, per device:
 #
-#   block/<hub>/<0-63>    the hub itself. Six boolean state properties say which sides carry a storage
-#                         network connection, the tile entity encodes them into an int, and Nova asks
-#                         for the matching model. Same bit order and same arm geometry as
-#                         tools/gen-cable-models.ps1, deliberately: the arms have to meet a cable's
-#                         arms without a seam, so they share the shape, the texture and the per-face
-#                         UV rotations.
+#   block/<hub>/core      the hub's core, worn as a display entity over the *cable's* block model.
+#                         The arms used to be generated here too, sixty-four combinations of them per
+#                         hub and twice that with the unlit set — and every one was the cable's own arms
+#                         with a different core sitting in the middle. The geometry was already
+#                         identical to tools/gen-cable-models.ps1, deliberately, so that a hub's arms
+#                         meet a cable's without a seam; and a hub's core is an eight-cube that hides
+#                         the cable's four-cube completely. So a hub simply uses `block/cable/<id>` and
+#                         puts its own core on top, which is one shared set of sixty-four instead of six
+#                         hundred and fifty.
 #
 #   block/<hub>/attachment  the port. Not part of the block model - what a hub serves is not block
 #                         state, it can appear and vanish without one - so the tile entity renders one
@@ -29,7 +32,6 @@ $modelsDir = Join-Path $root 'src\main\resources\assets\models'
 $itemDir = Join-Path $modelsDir 'item'
 New-Item -ItemType Directory -Force $itemDir | Out-Null
 
-$TEX_CABLE = 'smartstorage:block/cable'
 $TEX_CASING = 'smartstorage:block/storage_casing'
 
 $hubs = @(
@@ -122,41 +124,26 @@ function Write-Model([string] $path, $textures, $elements) {
 }
 
 foreach ($hub in $hubs) {
-    # every hub wears the storage cable's arms unless it asks for its own
-    $arm = if ($hub.ContainsKey('arm')) { $hub.arm } else { $TEX_CABLE }
     $blockDir = Join-Path $modelsDir "block\$($hub.name)"
     New-Item -ItemType Directory -Force $blockDir | Out-Null
-    New-Item -ItemType Directory -Force (Join-Path $blockDir 'off') | Out-Null
 
     foreach ($variant in $variants) {
-        $core = "$($hub.core)$($variant.texture)"
-        $port = "$($hub.port)$($variant.texture)"
+        $suffix = if ($variant.suffix -eq '') { '' } else { '_off' }
 
-        $coreTextures = [ordered]@{ particle = '#1'; '0' = $arm; '1' = $core }
-        $portTextures = [ordered]@{ particle = '#2'; '2' = $TEX_CASING; '3' = $port }
+        Write-Model (Join-Path $blockDir "core$suffix.json") `
+            ([ordered]@{ particle = '#1'; '1' = "$($hub.core)$($variant.texture)" }) `
+            (@(New-Core))
 
-        for ($id = 0; $id -lt 64; $id++) {
-            $elements = @()
-            for ($bit = 0; $bit -lt 6; $bit++) {
-                if (($id -band (1 -shl $bit)) -eq 0) { continue }
-                $elements += New-Arm $arms[$bit]
-            }
-
-            # the core goes last so it renders over the arm seams
-            $elements += New-Core
-
-            Write-Model (Join-Path $blockDir "$($variant.suffix)$id.json") $coreTextures $elements
-        }
-
-        $attachment = if ($variant.suffix -eq '') { 'attachment.json' } else { 'attachment_off.json' }
-        Write-Model (Join-Path $blockDir $attachment) $portTextures (New-Port)
+        Write-Model (Join-Path $blockDir "attachment$suffix.json") `
+            ([ordered]@{ particle = '#2'; '2' = $TEX_CASING; '3' = "$($hub.port)$($variant.texture)" }) `
+            (New-Port)
     }
 
     # what you hold is always lit: an item is not on anybody's network
     $itemTextures = [ordered]@{ particle = '#1'; '1' = $hub.core; '2' = $TEX_CASING; '3' = $hub.port }
     Write-Model (Join-Path $itemDir "$($hub.name).json") $itemTextures (@(New-Core) + (New-Port))
 
-    Write-Host "  $($hub.name): 128 models, 2 attachments, item"
+    Write-Host "  $($hub.name): 2 cores, 2 attachments, item"
 }
 
 # The energy valve, which is a hub with the arms taken out of the block model.

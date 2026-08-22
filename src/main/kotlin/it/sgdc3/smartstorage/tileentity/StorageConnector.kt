@@ -122,6 +122,9 @@ class StorageConnector(
     override val portModel = Models.CONNECTOR_ATTACHMENT
     override val portModelOff = Models.CONNECTOR_ATTACHMENT_OFF
 
+    override val coreModel = Models.CONNECTOR_CORE
+    override val coreModelOff = Models.CONNECTOR_CORE_OFF
+
     override val storageHolder = StorageHolder(this)
 
     @Volatile

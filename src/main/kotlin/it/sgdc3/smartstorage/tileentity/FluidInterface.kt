@@ -94,6 +94,9 @@ class FluidInterface(
     override val portModel = Models.FLUID_INTERFACE_ATTACHMENT
     override val portModelOff = Models.FLUID_INTERFACE_ATTACHMENT_OFF
 
+    override val coreModel = Models.FLUID_INTERFACE_CORE
+    override val coreModelOff = Models.FLUID_INTERFACE_CORE_OFF
+
     override val storageHolder = StorageHolder(this)
 
     @Volatile

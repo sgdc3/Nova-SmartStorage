@@ -17,7 +17,7 @@ object UpgradeTypes {
 
     val STORAGE = SmartStorage.upgradeType<Int>("storage") {
         item(Items.STORAGE_UPGRADE)
-        placeholder(GuiItems.STORAGE_UPGRADE)
+        placeholder(GuiItems.STORAGE_UPGRADE_PLACEHOLDER)
         defaultValue(0)
     }
 
@@ -29,7 +29,7 @@ object UpgradeTypes {
      */
     val VOID = SmartStorage.upgradeType<Int>("void") {
         item(Items.VOID_UPGRADE)
-        placeholder(GuiItems.VOID_UPGRADE)
+        placeholder(GuiItems.VOID_UPGRADE_PLACEHOLDER)
         defaultValue(0)
     }
 
@@ -41,7 +41,7 @@ object UpgradeTypes {
      */
     val COMPACTING = SmartStorage.upgradeType<Int>("compacting") {
         item(Items.COMPACTING_UPGRADE)
-        placeholder(GuiItems.COMPACTING_UPGRADE)
+        placeholder(GuiItems.COMPACTING_UPGRADE_PLACEHOLDER)
         defaultValue(0)
     }
 

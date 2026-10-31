@@ -10,6 +10,8 @@
 #            labelled box. '.' is transparent. Same idea as tools/gen-block-textures.ps1, minus the
 #            casing underneath, because an item has no casing to sit on.
 #
+# Any of them can take `fade`, an opacity applied over the whole result once it is drawn.
+#
 # Usage:  pwsh -File tools/gen-placeholder-textures.ps1
 
 $ErrorActionPreference = 'Stop'
@@ -59,7 +61,11 @@ $textures = @(
     @{ path = 'item\fluid_cell_256b.png'; style = 'panel'; color = @(58, 70, 84); glyph = 'droplet'; accent = @(120, 180, 255) }
     @{ path = 'item\fluid_cell_1024b.png'; style = 'panel'; color = @(58, 70, 84); glyph = 'droplet'; accent = @(220, 150, 255) }
     @{ path = 'item\storage_upgrade.png'; style = 'panel'; color = @(72, 64, 52); glyph = 'upgrade'; accent = @(255, 190, 110) }
-    @{ path = 'item\gui\storage_upgrade.png'; style = 'panel'; color = @(72, 64, 52); glyph = 'upgrade'; accent = @(255, 190, 110) }
+    # What Simple-Upgrades shows in an upgrade slot with nothing in it: the upgrade itself at 40%,
+    # so the empty slot says which item goes there without looking like one is already in it. Its
+    # own placeholders are made the same way, so ours sit beside them without standing out. Each
+    # stays right after its item: moving one would shift the seeded grain of everything below it.
+    @{ path = 'item\gui\placeholder\storage_upgrade.png'; style = 'panel'; color = @(72, 64, 52); glyph = 'upgrade'; accent = @(255, 190, 110); fade = 0.4 }
     # Not a placeholder: a tablet, drawn as one. A screen showing a list, a bezel, a home button.
     @{
         path = 'item\wireless_terminal.png'; style = 'sprite'
@@ -90,9 +96,9 @@ $textures = @(
         )
     }
     @{ path = 'item\void_upgrade.png'; style = 'panel'; color = @(40, 32, 44); glyph = 'void'; accent = @(210, 90, 200) }
-    @{ path = 'item\gui\void_upgrade.png'; style = 'panel'; color = @(40, 32, 44); glyph = 'void'; accent = @(210, 90, 200) }
+    @{ path = 'item\gui\placeholder\void_upgrade.png'; style = 'panel'; color = @(40, 32, 44); glyph = 'void'; accent = @(210, 90, 200); fade = 0.4 }
     @{ path = 'item\compacting_upgrade.png'; style = 'panel'; color = @(44, 48, 58); glyph = 'compact'; accent = @(150, 200, 255) }
-    @{ path = 'item\gui\compacting_upgrade.png'; style = 'panel'; color = @(44, 48, 58); glyph = 'compact'; accent = @(150, 200, 255) }
+    @{ path = 'item\gui\placeholder\compacting_upgrade.png'; style = 'panel'; color = @(44, 48, 58); glyph = 'compact'; accent = @(150, 200, 255); fade = 0.4 }
     @{ path = 'item\gui\status_online.png'; style = 'panel'; color = @(26, 34, 28); glyph = 'lamp'; accent = @(110, 240, 130) }
     @{ path = 'item\gui\status_offline.png'; style = 'panel'; color = @(34, 26, 26); glyph = 'lamp'; accent = @(120, 60, 60) }
     # The barrel's lock switch. One shape in two states rather than two shapes, which is the same thing
@@ -184,6 +190,15 @@ foreach ($tex in $textures) {
                     if ($row[$x] -eq '#') {
                         $bmp.SetPixel($x + 4, $y + 4, $accent)
                     }
+                }
+            }
+        }
+
+        if ($tex.fade) {
+            for ($y = 0; $y -lt 16; $y++) {
+                for ($x = 0; $x -lt 16; $x++) {
+                    $c = $bmp.GetPixel($x, $y)
+                    $bmp.SetPixel($x, $y, [System.Drawing.Color]::FromArgb([int]($c.A * $tex.fade), $c.R, $c.G, $c.B))
                 }
             }
         }

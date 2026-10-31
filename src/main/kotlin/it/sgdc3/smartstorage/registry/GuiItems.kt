@@ -13,11 +13,12 @@ import xyz.xenondevs.nova.registry.RegistryEntry
 object GuiItems {
 
     /**
-     * Icon for the storage upgrade in Simple-Upgrades' upgrades menu.
+     * What Simple-Upgrades draws in an empty upgrade slot: the upgrade itself, faded and without a
+     * button behind it, the way its own placeholders look.
      */
-    val STORAGE_UPGRADE: RegistryEntry.Paper<ItemType> = guiItem("storage_upgrade")
-    val VOID_UPGRADE: RegistryEntry.Paper<ItemType> = guiItem("void_upgrade")
-    val COMPACTING_UPGRADE: RegistryEntry.Paper<ItemType> = guiItem("compacting_upgrade")
+    val STORAGE_UPGRADE_PLACEHOLDER: RegistryEntry.Paper<ItemType> = upgradePlaceholder("storage_upgrade")
+    val VOID_UPGRADE_PLACEHOLDER: RegistryEntry.Paper<ItemType> = upgradePlaceholder("void_upgrade")
+    val COMPACTING_UPGRADE_PLACEHOLDER: RegistryEntry.Paper<ItemType> = upgradePlaceholder("compacting_upgrade")
 
     /**
      * The lamp on the storage controller's status, which used to be a dye — a stand-in that read as an
@@ -46,6 +47,17 @@ object GuiItems {
         if (localizedName == null) name(null) else localizedName(localizedName)
         hidden(true)
         modelDefinition { model = buildModel { createGuiModel(background = true, stretched = false, "item/gui/$name") } }
+    }
+
+    /**
+     * No name: an empty slot in a menu full of them has nothing to say on hover.
+     */
+    private fun upgradePlaceholder(name: String): RegistryEntry.Paper<ItemType> = item("gui/placeholder/$name") {
+        name(null)
+        hidden(true)
+        modelDefinition {
+            model = buildModel { createGuiModel(background = false, stretched = false, "item/gui/placeholder/$name") }
+        }
     }
 
     /**

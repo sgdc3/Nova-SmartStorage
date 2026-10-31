@@ -2,6 +2,8 @@ package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.SmartStorage
 import it.sgdc3.smartstorage.gui.ClickableItem
+import it.sgdc3.smartstorage.gui.MenuContent
+import it.sgdc3.smartstorage.gui.MenuTracker
 import it.sgdc3.smartstorage.gui.TerminalContent
 import it.sgdc3.smartstorage.registry.BlockStateProperties
 import it.sgdc3.smartstorage.registry.Blocks.STORAGE_BARREL
@@ -17,16 +19,18 @@ import it.sgdc3.smartstorage.util.abbreviate
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Material
+import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
 import org.bukkit.entity.Player
 import org.bukkit.event.inventory.ClickType
 import org.bukkit.inventory.ItemStack
 import xyz.xenondevs.cbf.Compound
 import xyz.xenondevs.commons.provider.MutableProvider
+import xyz.xenondevs.invui.dsl.NormalSplitWindowDsl
 import xyz.xenondevs.invui.gui.Gui
 import xyz.xenondevs.invui.item.ItemBuilder
 import xyz.xenondevs.invui.item.ItemProvider
-import xyz.xenondevs.nova.addon.simpleupgrades.gui.OpenUpgradesItem
+import xyz.xenondevs.nova.addon.simpleupgrades.openUpgradesItem
 import xyz.xenondevs.nova.addon.simpleupgrades.storedUpgradeHolder
 import xyz.xenondevs.nova.config.entry
 import xyz.xenondevs.nova.context.Context
@@ -36,25 +40,27 @@ import xyz.xenondevs.nova.context.intention.BlockPlace
 import xyz.xenondevs.nova.util.addItemCorrectly
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
 import xyz.xenondevs.nova.util.item.ItemUtils
-import xyz.xenondevs.nova.util.item.novaItem
 import xyz.xenondevs.nova.util.item.retrieveData
 import xyz.xenondevs.nova.util.item.storeData
 import xyz.xenondevs.nova.util.playClickSound
 import xyz.xenondevs.nova.util.serverTick
-import xyz.xenondevs.nova.world.BlockPos
 import xyz.xenondevs.nova.world.InteractionResult
-import xyz.xenondevs.nova.world.block.state.NovaBlockState
+import xyz.xenondevs.nova.world.block.NovaBlockState
+import xyz.xenondevs.nova.world.block.config
+import xyz.xenondevs.nova.world.block.itemTypeOrNull
 import xyz.xenondevs.nova.world.block.state.property.DefaultBlockStateProperties
 import xyz.xenondevs.nova.world.block.tileentity.NetworkedTileEntity
-import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
 import xyz.xenondevs.nova.world.block.tileentity.network.NetworkManager
 import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkConnectionType
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.inventory.NetworkedInventory
+import xyz.xenondevs.nova.world.chunkPos
 import xyz.xenondevs.nova.world.format.NetworkState
+import xyz.xenondevs.nova.world.item.itemType
 import java.util.UUID
 import kotlin.concurrent.withLock
 import kotlin.math.max
 import kotlin.math.min
+import org.bukkit.inventory.ItemType as BukkitItemType
 
 private val BASE_STACKS by STORAGE_BARREL.config.entry<Int>("base_stacks")
 
@@ -135,10 +141,10 @@ internal const val EXPOSED_TIERS = 3
  * there is anything to redraw.
  */
 class StorageBarrel(
-    pos: BlockPos,
+    block: Block,
     state: NovaBlockState,
     data: Compound
-) : NetworkedTileEntity(pos, state, data) {
+) : NetworkedTileEntity(block, state, data) {
 
     // Every type this barrel takes has to be listed here, not merely registered: the holder answers null
     // for anything it was not told about, and asking it for one is a null cast in the constructor — which
@@ -669,7 +675,7 @@ class StorageBarrel(
         }
 
         for (stack in pieces)
-            pos.world.dropItemNaturally(pos.location.add(0.5, 1.0, 0.5), stack)
+            block.world.dropItemNaturally(block.location.add(0.5, 1.0, 0.5), stack)
     }
 
     private fun setRemainder(next: Long) {
@@ -778,7 +784,7 @@ class StorageBarrel(
 
         val (current, excess) = overflow
         for (stack in split(current, excess))
-            pos.world.dropItemNaturally(pos.location.add(0.5, 1.0, 0.5), stack)
+            block.world.dropItemNaturally(block.location.add(0.5, 1.0, 0.5), stack)
     }
 
     /**
@@ -805,8 +811,8 @@ class StorageBarrel(
     override fun handleEnable() {
         super.handleEnable()
 
-        val facing = blockState[DefaultBlockStateProperties.FACING] ?: BlockFace.NORTH
-        face = BarrelFace(pos, facing)
+        val facing = blockState[DefaultBlockStateProperties.FACING_HORIZONTAL] ?: BlockFace.NORTH
+        face = BarrelFace(block, facing)
         dirty = true
     }
 
@@ -820,8 +826,8 @@ class StorageBarrel(
      * them, so a chest set beside a barrel would otherwise fill it, every tick, for nobody.
      */
     private suspend fun syncTouchingFaces(state: NetworkState) {
-        restrictItemFaces(state, pos, itemHolder, extractOnlyFromBelow = true)
-        touching.refresh(state, pos)
+        restrictItemFaces(state, block, itemHolder, extractOnlyFromBelow = true)
+        touching.refresh(state, block)
     }
 
     override fun handleTick() {
@@ -831,7 +837,7 @@ class StorageBarrel(
         // face is what stops the chest beside this barrel from filling it, and a closed face no longer
         // receives the update that would say the chest is gone. See closeTouchingItemFaces.
         if (serverTick % TOUCH_RESCAN_TICKS == 0)
-            NetworkManager.queueWrite(pos.chunkPos, ::syncTouchingFaces)
+            NetworkManager.queueWrite(block.chunkPos, ::syncTouchingFaces)
 
         if (!dirty)
             return
@@ -840,7 +846,7 @@ class StorageBarrel(
         ejectOverflow()
         applyLockedState()
         refreshFace()
-        menuContainer.forEachMenu(StorageBarrelMenu::update)
+        menus.forEach(StorageBarrelMenu::update)
     }
 
     /**
@@ -855,7 +861,7 @@ class StorageBarrel(
         if (blockState[BlockStateProperties.LOCKED] == locked)
             return
 
-        updateBlockState(blockState.with(BlockStateProperties.LOCKED, locked))
+        updateBlockState(blockState.apply { this[BlockStateProperties.LOCKED] = locked })
     }
 
     override fun handleDisable() {
@@ -894,7 +900,7 @@ class StorageBarrel(
             for ((index, type) in BARREL_UPGRADES.withIndex()) {
                 val level = levels.getOrNull(index) ?: 0
                 if (level > 0)
-                    upgradeHolder.addUpgrade(type, level)
+                    upgradeHolder.getLevelProvider(type).set(min(level, upgradeHolder.getLimit(type)))
             }
         }
 
@@ -943,7 +949,7 @@ class StorageBarrel(
         // Matched one stack at a time against what the holder actually holds rather than by item type,
         // so an upgrade a player happens to have parked in the drop-off slot still falls out as it should.
         for (stack in upgrades) {
-            val at = drops.indexOfFirst { it.novaItem == stack.novaItem && it.amount == stack.amount }
+            val at = drops.indexOfFirst { it.itemType == stack.itemType && it.amount == stack.amount }
             if (at >= 0)
                 drops.removeAt(at)
         }
@@ -955,7 +961,7 @@ class StorageBarrel(
         // `block.item` rather than the registry constant: it is the expression `TileEntity.getDrops`
         // itself builds the stack from, so what is looked for here cannot drift from what was made.
         // Absent means the barrel is not dropping at all, and then neither is anything it carried.
-        val self = drops.firstOrNull { it.novaItem == block.item } ?: return drops
+        val self = drops.firstOrNull { it.itemType == blockType.itemTypeOrNull } ?: return drops
 
         val (current, count, wasLocked) = StorageLock.withLock { Triple(type, amount, locked) }
         val carried = Compound()
@@ -1237,7 +1243,7 @@ class StorageBarrel(
 
             if (taken < amount) {
                 SHORTFALL.log {
-                    "Barrel at $pos handed out $amount× $type but only had $taken: " +
+                    "Barrel at $block handed out $amount× $type but only had $taken: " +
                         "${amount - taken} item(s) were created."
                 }
             }
@@ -1307,8 +1313,11 @@ class StorageBarrel(
 
     }
 
-    @TileEntityMenuClass
-    inner class StorageBarrelMenu : GlobalTileEntityMenu(GuiTextures.STORAGE_BARREL) {
+    private val menus = MenuTracker<StorageBarrelMenu>()
+
+    override val menu = menus.menu(GuiTextures.STORAGE_BARREL) { StorageBarrelMenu(this) }
+
+    inner class StorageBarrelMenu(private val host: NormalSplitWindowDsl) : MenuContent {
 
         /**
          * One slot per rung of the barrel's compaction ladder, densest first.
@@ -1335,7 +1344,7 @@ class StorageBarrel(
                 ". . i . c d e . l",
                 ". . . . . . . . ."
             )
-            .addIngredient('u', OpenUpgradesItem(upgradeHolder))
+            .addIngredient('u', with(host) { openUpgradesItem(upgradeHolder) })
             // the same arrow the terminals draw in theirs: an empty slot that takes what you drop on it
             // has to be told apart from a panel that does nothing, and it is the same slot everywhere
             .addIngredient('i', depositInventory, TerminalContent.depositBackground())
@@ -1499,7 +1508,7 @@ class StorageBarrel(
             val (current, count) = StorageLock.withLock { type to amount }
 
             if (current == null) {
-                return ItemBuilder(Material.GRAY_STAINED_GLASS_PANE)
+                return ItemBuilder(BukkitItemType.GRAY_STAINED_GLASS_PANE)
                     .setName(
                         Component.translatable("menu.smartstorage.barrel.empty", NamedTextColor.GRAY)
                             .withoutPreFormatting()
@@ -1556,8 +1565,7 @@ class StorageBarrel(
          * Nova's own side-config colour language: blue for a switch that is on, grey for one that is off.
          */
         private fun lockIcon(): ItemBuilder =
-            (if (locked) GuiItems.LOCK_ON else GuiItems.LOCK_OFF)
-                .createClientsideItemBuilder()
+            ItemBuilder((if (locked) GuiItems.LOCK_ON else GuiItems.LOCK_OFF).get())
                 .setName(
                     Component.translatable(
                         "menu.smartstorage.barrel.lock",

@@ -1,6 +1,8 @@
 package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.gui.ClickableItem
+import it.sgdc3.smartstorage.gui.MenuContent
+import it.sgdc3.smartstorage.gui.MenuTracker
 import it.sgdc3.smartstorage.item.WirelessTerminalBehavior
 import it.sgdc3.smartstorage.network.OfflineReason
 import it.sgdc3.smartstorage.network.StorageControllerNode
@@ -9,17 +11,19 @@ import it.sgdc3.smartstorage.network.StorageNetwork
 import it.sgdc3.smartstorage.network.StorageNetworkStatus
 import it.sgdc3.smartstorage.network.StorageTotals
 import it.sgdc3.smartstorage.registry.Blocks.STORAGE_CONTROLLER
+import it.sgdc3.smartstorage.registry.GuiItems
 import it.sgdc3.smartstorage.registry.GuiTextures
 import it.sgdc3.smartstorage.registry.NetworkTypes
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import it.sgdc3.smartstorage.registry.GuiItems
+import org.bukkit.block.Block
 import xyz.xenondevs.cbf.Compound
 import xyz.xenondevs.commons.provider.Provider
 import xyz.xenondevs.commons.provider.combinedProvider
+import xyz.xenondevs.invui.dsl.NormalSplitWindowDsl
 import xyz.xenondevs.invui.gui.Gui
 import xyz.xenondevs.invui.item.ItemBuilder
-import xyz.xenondevs.nova.addon.simpleupgrades.gui.OpenUpgradesItem
+import xyz.xenondevs.nova.addon.simpleupgrades.openUpgradesItem
 import xyz.xenondevs.nova.addon.simpleupgrades.registry.UpgradeTypes
 import xyz.xenondevs.nova.addon.simpleupgrades.storedEnergyHolder
 import xyz.xenondevs.nova.addon.simpleupgrades.storedUpgradeHolder
@@ -28,16 +32,14 @@ import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
 import xyz.xenondevs.nova.context.intention.BlockInteract
 import xyz.xenondevs.nova.ui.menu.EnergyBar
-import xyz.xenondevs.nova.ui.menu.sideconfig.OpenSideConfigItem
-import xyz.xenondevs.nova.ui.menu.sideconfig.SideConfigMenu
+import xyz.xenondevs.nova.ui.menu.sideconfig.openSideConfigItem
 import xyz.xenondevs.nova.util.NumberFormatUtils
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
 import xyz.xenondevs.nova.util.playClickSound
-import xyz.xenondevs.nova.world.BlockPos
 import xyz.xenondevs.nova.world.InteractionResult
-import xyz.xenondevs.nova.world.block.state.NovaBlockState
+import xyz.xenondevs.nova.world.block.NovaBlockState
+import xyz.xenondevs.nova.world.block.config
 import xyz.xenondevs.nova.world.block.tileentity.NetworkedTileEntity
-import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
 import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkConnectionType
 import kotlin.math.roundToLong
 
@@ -54,10 +56,10 @@ private val MAX_DEVICES_PROVIDER = STORAGE_CONTROLLER.config.entry<Int>("max_dev
  * fed by any Nova generator or power cell.
  */
 class StorageController(
-    pos: BlockPos,
+    block: Block,
     state: NovaBlockState,
     data: Compound
-) : NetworkedTileEntity(pos, state, data), StorageControllerNode {
+) : NetworkedTileEntity(block, state, data), StorageControllerNode {
 
     override val storageHolder = StorageHolder(this)
 
@@ -145,7 +147,7 @@ class StorageController(
         // player with the menu open should be told
         setPowered(displayStatus.isOnline)
 
-        if (menuContainer.getMenus<StorageControllerMenu>().none())
+        if (!menus.isViewed)
             return
 
         val status = displayStatus
@@ -154,7 +156,7 @@ class StorageController(
         if (status != renderedStatus || totals != renderedTotals) {
             renderedStatus = status
             renderedTotals = totals
-            menuContainer.forEachMenu(StorageControllerMenu::update)
+            menus.forEach(StorageControllerMenu::update)
         }
     }
 
@@ -194,10 +196,12 @@ class StorageController(
         return InteractionResult.Success(swing = true)
     }
 
-    @TileEntityMenuClass
-    inner class StorageControllerMenu : GlobalTileEntityMenu(GuiTextures.STORAGE_CONTROLLER) {
+    private val menus = MenuTracker<StorageControllerMenu>()
 
-        private val sideConfigMenu = SideConfigMenu(this@StorageController, ::openWindow)
+    override val menu = menus.menu(GuiTextures.STORAGE_CONTROLLER) { StorageControllerMenu(this) }
+
+    inner class StorageControllerMenu(private val host: NormalSplitWindowDsl) : MenuContent {
+
         private val statusItem = ClickableItem({ statusIcon() })
 
         override val gui = Gui.builder()
@@ -208,8 +212,8 @@ class StorageController(
                 ". . . . . . . e .",
                 ". . . . . . . . ."
             )
-            .addIngredient('s', OpenSideConfigItem(sideConfigMenu))
-            .addIngredient('u', OpenUpgradesItem(upgradeHolder))
+            .addIngredient('s', with(host) { openSideConfigItem() })
+            .addIngredient('u', with(host) { openUpgradesItem(upgradeHolder) })
             .addIngredient('i', statusItem)
             .addIngredient('e', EnergyBar(3, energyHolder))
             .build()
@@ -223,8 +227,7 @@ class StorageController(
             // whatever handleTick last measured, rather than a fresh walk: this runs once per viewer per
             // re-render, and the totals are the same for all of them
             val totals = renderedTotals ?: StorageTotals.EMPTY
-            val builder = (if (status.isOnline) GuiItems.STATUS_ONLINE else GuiItems.STATUS_OFFLINE)
-                .createClientsideItemBuilder()
+            val builder = ItemBuilder((if (status.isOnline) GuiItems.STATUS_ONLINE else GuiItems.STATUS_OFFLINE).get())
 
             builder.setName(
                 Component.translatable(

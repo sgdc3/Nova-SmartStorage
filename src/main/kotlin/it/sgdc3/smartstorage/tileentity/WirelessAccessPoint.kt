@@ -1,6 +1,8 @@
 package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.gui.ClickableItem
+import it.sgdc3.smartstorage.gui.MenuContent
+import it.sgdc3.smartstorage.gui.MenuTracker
 import it.sgdc3.smartstorage.gui.networkStatusIcon
 import it.sgdc3.smartstorage.network.StorageEndPoint
 import it.sgdc3.smartstorage.network.StorageHolder
@@ -9,17 +11,17 @@ import it.sgdc3.smartstorage.network.WirelessNode
 import it.sgdc3.smartstorage.registry.GuiTextures
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import org.bukkit.Material
+import org.bukkit.block.Block
+import org.bukkit.inventory.ItemType
 import xyz.xenondevs.cbf.Compound
+import xyz.xenondevs.invui.dsl.NormalSplitWindowDsl
 import xyz.xenondevs.invui.gui.Gui
 import xyz.xenondevs.invui.item.ItemBuilder
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
-import xyz.xenondevs.nova.world.BlockPos
-import xyz.xenondevs.nova.world.block.state.NovaBlockState
+import xyz.xenondevs.nova.world.block.NovaBlockState
 import xyz.xenondevs.nova.world.block.tileentity.NetworkedTileEntity
-import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
 
 /**
  * The thing a wireless terminal actually talks to.
@@ -34,10 +36,10 @@ import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
  * answer is no.
  */
 class WirelessAccessPoint(
-    pos: BlockPos,
+    block: Block,
     state: NovaBlockState,
     data: Compound
-) : NetworkedTileEntity(pos, state, data), StorageEndPoint, WirelessNode {
+) : NetworkedTileEntity(block, state, data), StorageEndPoint, WirelessNode {
 
     override val storageHolder = StorageHolder(this)
 
@@ -55,7 +57,7 @@ class WirelessAccessPoint(
      */
     override fun handleTick() {
         if (setPowered(storageNetwork?.isOnline == true))
-            menuContainer.forEachMenu(WirelessAccessPointMenu::update)
+            menus.forEach(WirelessAccessPointMenu::update)
     }
 
     override fun handleDisable() {
@@ -68,8 +70,11 @@ class WirelessAccessPoint(
         super.handleBreak(ctx)
     }
 
-    @TileEntityMenuClass
-    inner class WirelessAccessPointMenu : GlobalTileEntityMenu(GuiTextures.WIRELESS_ACCESS_POINT) {
+    private val menus = MenuTracker<WirelessAccessPointMenu>()
+
+    override val menu = menus.menu(GuiTextures.WIRELESS_ACCESS_POINT) { WirelessAccessPointMenu(this) }
+
+    inner class WirelessAccessPointMenu(private val host: NormalSplitWindowDsl) : MenuContent {
 
         private val statusItem = ClickableItem({ statusIcon() })
 
@@ -95,7 +100,7 @@ class WirelessAccessPoint(
             networkItem.notifyWindows()
         }
 
-        private fun statusIcon(): ItemBuilder = ItemBuilder(Material.ENDER_PEARL)
+        private fun statusIcon(): ItemBuilder = ItemBuilder(ItemType.ENDER_PEARL)
             .setName(Component.translatable("menu.smartstorage.access_point.title").withoutPreFormatting())
             .setLore(
                 listOf(

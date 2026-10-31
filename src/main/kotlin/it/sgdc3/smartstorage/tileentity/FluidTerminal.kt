@@ -1,6 +1,8 @@
 package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.gui.ClickableItem
+import it.sgdc3.smartstorage.gui.MenuContent
+import it.sgdc3.smartstorage.gui.MenuTracker
 import it.sgdc3.smartstorage.gui.networkStatusIcon
 import it.sgdc3.smartstorage.network.StorageEndPoint
 import it.sgdc3.smartstorage.network.StorageHolder
@@ -10,10 +12,12 @@ import it.sgdc3.smartstorage.registry.GuiTextures
 import it.sgdc3.smartstorage.registry.TERMINAL_REFRESH_TICKS
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import org.bukkit.Material
+import org.bukkit.block.Block
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
+import org.bukkit.inventory.ItemType
 import xyz.xenondevs.cbf.Compound
+import xyz.xenondevs.invui.dsl.NormalSplitWindowDsl
 import xyz.xenondevs.invui.gui.Gui
 import xyz.xenondevs.invui.item.ItemBuilder
 import xyz.xenondevs.nova.context.Context
@@ -22,11 +26,10 @@ import xyz.xenondevs.nova.util.NumberFormatUtils
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
 import xyz.xenondevs.nova.util.playClickSound
 import xyz.xenondevs.nova.util.serverTick
-import xyz.xenondevs.nova.world.BlockPos
-import xyz.xenondevs.nova.world.block.state.NovaBlockState
+import xyz.xenondevs.nova.world.block.NovaBlockState
 import xyz.xenondevs.nova.world.block.tileentity.NetworkedTileEntity
-import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
 import xyz.xenondevs.nova.world.block.tileentity.network.type.fluid.FluidType
+import xyz.xenondevs.nova.world.item.itemType
 import kotlin.math.max
 
 /**
@@ -44,10 +47,10 @@ private const val BUCKET = 1000L
  * you cannot put a bucket "on the cursor" half full.
  */
 class FluidTerminal(
-    pos: BlockPos,
+    block: Block,
     state: NovaBlockState,
     data: Compound
-) : NetworkedTileEntity(pos, state, data), StorageEndPoint {
+) : NetworkedTileEntity(block, state, data), StorageEndPoint {
 
     override val storageHolder = StorageHolder(this)
 
@@ -69,13 +72,13 @@ class FluidTerminal(
         drainDeposit()
         // the lamp in the menu says what the block's face says, so one signal redraws both
         if (setPowered(storageNetwork?.isOnline == true))
-            menuContainer.forEachMenu(FluidTerminalMenu::update)
+            menus.forEach(FluidTerminalMenu::update)
 
         // reading an amount walks every cell and tank on the network, so it happens for an open menu or
         // not at all — the same guard the item terminals have, for the same reason
         val interval = max(1, TERMINAL_REFRESH_TICKS)
-        if (serverTick % interval == 0 && menuContainer.getMenus<TileEntityMenu>().any())
-            menuContainer.forEachMenu(FluidTerminalMenu::update)
+        if (serverTick % interval == 0 && menus.isViewed)
+            menus.forEach(FluidTerminalMenu::update)
     }
 
     override fun handleDisable() {
@@ -94,9 +97,9 @@ class FluidTerminal(
     /**
      * The fluid a full bucket carries, or null if [stack] is not one.
      */
-    private fun fluidOf(stack: ItemStack?): FluidType? = when (stack?.type) {
-        Material.WATER_BUCKET -> FluidType.WATER
-        Material.LAVA_BUCKET -> FluidType.LAVA
+    private fun fluidOf(stack: ItemStack?): FluidType? = when (stack?.itemType) {
+        ItemType.WATER_BUCKET -> FluidType.WATER
+        ItemType.LAVA_BUCKET -> FluidType.LAVA
         else -> null
     }
 
@@ -112,7 +115,7 @@ class FluidTerminal(
             return
 
         val left = stack.amount - 1
-        val emptied = ItemStack.of(Material.BUCKET)
+        val emptied = ItemType.BUCKET.createItemStack()
         val updated = if (left <= 0) emptied else stack.clone().apply { amount = left }
 
         if (!depositInventory.setItem(SELF_UPDATE_REASON, 0, updated)) {
@@ -125,7 +128,7 @@ class FluidTerminal(
 
         // the stack was more than one bucket, so the empty one has nowhere to go but the world
         if (left > 0)
-            pos.world.dropItemNaturally(pos.location.add(0.5, 1.0, 0.5), emptied)
+            block.world.dropItemNaturally(block.location.add(0.5, 1.0, 0.5), emptied)
     }
 
     /**
@@ -177,8 +180,11 @@ class FluidTerminal(
         return false
     }
 
-    @TileEntityMenuClass
-    inner class FluidTerminalMenu : GlobalTileEntityMenu(GuiTextures.FLUID_TERMINAL) {
+    private val menus = MenuTracker<FluidTerminalMenu>()
+
+    override val menu = menus.menu(GuiTextures.FLUID_TERMINAL) { FluidTerminalMenu(this) }
+
+    inner class FluidTerminalMenu(private val host: NormalSplitWindowDsl) : MenuContent {
 
         private val statusItem = ClickableItem({ statusIcon() })
         private val networkItem = ClickableItem({ networkStatusIcon(storageNetwork) })
@@ -233,7 +239,7 @@ class FluidTerminal(
                 return
 
             when {
-                cursor.type == Material.BUCKET -> {
+                cursor.itemType == ItemType.BUCKET -> {
                     if (!draw(network, fluid))
                         return
                     player.setItemOnCursor(fluid.bucket)
@@ -242,7 +248,7 @@ class FluidTerminal(
                 fluidOf(cursor) == fluid -> {
                     if (pour(network, fluid) <= 0L)
                         return
-                    player.setItemOnCursor(ItemStack.of(Material.BUCKET))
+                    player.setItemOnCursor(ItemType.BUCKET.createItemStack())
                 }
 
                 else -> return
@@ -256,7 +262,7 @@ class FluidTerminal(
             val network = network
             val amount = network?.amountOf(fluid) ?: 0L
 
-            val builder = if (amount > 0L) ItemBuilder(fluid.bucket) else ItemBuilder(Material.BUCKET)
+            val builder = if (amount > 0L) ItemBuilder(fluid.bucket) else ItemBuilder(ItemType.BUCKET)
             builder.setName(Component.translatable(fluid.localizedName, NamedTextColor.GRAY).withoutPreFormatting())
             builder.setLore(
                 listOf(
@@ -276,7 +282,7 @@ class FluidTerminal(
         private fun statusIcon(): ItemBuilder {
             val totals = storageNetwork?.totals() ?: StorageTotals.EMPTY
 
-            val builder = ItemBuilder(Material.PAPER)
+            val builder = ItemBuilder(ItemType.PAPER)
             builder.setName(Component.translatable("menu.smartstorage.fluid_terminal.title").withoutPreFormatting())
             builder.setLore(
                 listOf(

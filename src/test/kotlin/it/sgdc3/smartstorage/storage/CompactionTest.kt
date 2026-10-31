@@ -1,11 +1,10 @@
 package it.sgdc3.smartstorage.storage
 
 import it.sgdc3.smartstorage.ServerBacked
-import org.bukkit.Material
-import org.bukkit.inventory.ItemStack
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.bukkit.inventory.ItemType as BukkitItemType
 
 /**
  * The arithmetic a compacting barrel runs on.
@@ -20,22 +19,22 @@ import kotlin.test.assertTrue
 @ServerBacked
 class CompactionTest {
 
-    private fun type(material: Material): ItemType = ItemType.of(ItemStack.of(material))!!
+    private fun type(item: BukkitItemType): ItemType = ItemType.of(item.createItemStack())!!
 
-    private val nugget get() = type(Material.IRON_NUGGET)
-    private val ingot get() = type(Material.IRON_INGOT)
-    private val block get() = type(Material.IRON_BLOCK)
+    private val nugget get() = type(BukkitItemType.IRON_NUGGET)
+    private val ingot get() = type(BukkitItemType.IRON_INGOT)
+    private val block get() = type(BukkitItemType.IRON_BLOCK)
 
     /** The three-rung ladder the whole feature was asked for. */
     private val iron get() = Compaction(listOf(nugget, ingot, block), listOf(9, 9))
 
     /** Two rungs, four to one — a dyed-block sort of ladder. */
-    private val short get() = Compaction(listOf(type(Material.QUARTZ), type(Material.QUARTZ_BLOCK)), listOf(4))
+    private val short get() = Compaction(listOf(type(BukkitItemType.QUARTZ), type(BukkitItemType.QUARTZ_BLOCK)), listOf(4))
 
     @Test
     fun `the top of the ladder is what a barrel would store`() {
         assertEquals(block, iron.top)
-        assertEquals(type(Material.QUARTZ_BLOCK), short.top)
+        assertEquals(type(BukkitItemType.QUARTZ_BLOCK), short.top)
     }
 
     @Test
@@ -47,7 +46,7 @@ class CompactionTest {
 
     @Test
     fun `an item from another ladder is worth nothing`() {
-        assertEquals(0L, iron.unitsOf(type(Material.GOLD_INGOT)))
+        assertEquals(0L, iron.unitsOf(type(BukkitItemType.GOLD_INGOT)))
     }
 
     @Test
@@ -56,9 +55,9 @@ class CompactionTest {
         val pieces = iron.split(40L)
 
         assertEquals(2, pieces.size)
-        assertEquals(Material.IRON_INGOT, pieces[0].type)
+        assertEquals(type(BukkitItemType.IRON_INGOT), ItemType.of(pieces[0]))
         assertEquals(4, pieces[0].amount)
-        assertEquals(Material.IRON_NUGGET, pieces[1].type)
+        assertEquals(type(BukkitItemType.IRON_NUGGET), ItemType.of(pieces[1]))
         assertEquals(4, pieces[1].amount)
     }
 
@@ -68,7 +67,7 @@ class CompactionTest {
         val pieces = iron.split(81L)
 
         assertEquals(1, pieces.size)
-        assertEquals(Material.IRON_BLOCK, pieces[0].type)
+        assertEquals(type(BukkitItemType.IRON_BLOCK), ItemType.of(pieces[0]))
         assertEquals(1, pieces[0].amount)
     }
 
@@ -129,13 +128,13 @@ class CompactionTest {
 
     @Test
     fun `a two rung ladder counts in fours`() {
-        assertEquals(1L, short.unitsOf(type(Material.QUARTZ)))
-        assertEquals(4L, short.unitsOf(type(Material.QUARTZ_BLOCK)))
+        assertEquals(1L, short.unitsOf(type(BukkitItemType.QUARTZ)))
+        assertEquals(4L, short.unitsOf(type(BukkitItemType.QUARTZ_BLOCK)))
 
         val pieces = short.split(7L)
-        assertEquals(Material.QUARTZ_BLOCK, pieces[0].type)
+        assertEquals(type(BukkitItemType.QUARTZ_BLOCK), ItemType.of(pieces[0]))
         assertEquals(1, pieces[0].amount)
-        assertEquals(Material.QUARTZ, pieces[1].type)
+        assertEquals(type(BukkitItemType.QUARTZ), ItemType.of(pieces[1]))
         assertEquals(3, pieces[1].amount)
     }
 

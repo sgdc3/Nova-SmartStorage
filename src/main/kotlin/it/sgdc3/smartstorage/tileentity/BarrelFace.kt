@@ -2,6 +2,7 @@ package it.sgdc3.smartstorage.tileentity
 
 import net.kyori.adventure.text.Component
 import org.bukkit.Location
+import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
 import org.bukkit.entity.Display
 import org.bukkit.entity.ItemDisplay
@@ -11,7 +12,6 @@ import org.joml.Math
 import org.joml.Quaternionf
 import org.joml.Vector3f
 import xyz.xenondevs.nova.util.yaw
-import xyz.xenondevs.nova.world.BlockPos
 import xyz.xenondevs.nova.world.fakeentity.impl.FakeItemDisplay
 import xyz.xenondevs.nova.world.fakeentity.impl.FakeTextDisplay
 
@@ -126,7 +126,7 @@ data class FaceCell(val stack: ItemStack, val text: Component)
  *
  * Everything here touches packets, so it is main-thread only.
  */
-class BarrelFace(private val pos: BlockPos, private val facing: BlockFace) {
+class BarrelFace(private val block: Block, private val facing: BlockFace) {
 
     /**
      * A display shows its content facing south when it is not rotated, so this is the turn from south
@@ -249,10 +249,10 @@ class BarrelFace(private val pos: BlockPos, private val facing: BlockFace) {
      * [facing] and the cells would end up in front of the wrong side.
      */
     private fun anchor(side: Double, up: Double, out: Double): Location = Location(
-        pos.world,
-        pos.x + 0.5 + facing.modX * out + facing.modZ * side,
-        pos.y + 0.5 + up,
-        pos.z + 0.5 + facing.modZ * out - facing.modX * side
+        block.world,
+        block.x + 0.5 + facing.modX * out + facing.modZ * side,
+        block.y + 0.5 + up,
+        block.z + 0.5 + facing.modZ * out - facing.modX * side
     )
 
 }

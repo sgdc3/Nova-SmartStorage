@@ -139,6 +139,7 @@ class NetworkView internal constructor(
     override fun isEmpty(): Boolean =
         output.available() <= 0L || network?.isEmpty() != false
 
+    @Suppress("NOVA_MATERIAL_USAGE") // a stable tie-break that needs no game loaded, unlike Nova's item types
     override fun copyContents(destination: Array<ItemStack>) {
         val network = network
         val types = arrayOfNulls<ItemType>(size)

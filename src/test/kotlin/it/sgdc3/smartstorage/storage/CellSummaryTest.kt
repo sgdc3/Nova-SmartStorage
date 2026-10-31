@@ -1,7 +1,6 @@
 package it.sgdc3.smartstorage.storage
 
 import it.sgdc3.smartstorage.ServerBacked
-import org.bukkit.Material
 import org.bukkit.inventory.ItemStack
 import org.junit.jupiter.api.Test
 import xyz.xenondevs.cbf.Compound
@@ -9,6 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.bukkit.inventory.ItemType as BukkitItemType
 
 /**
  * The digest a storage cell's tooltip is drawn from.
@@ -21,11 +21,11 @@ import kotlin.test.assertTrue
 @ServerBacked
 class CellSummaryTest {
 
-    private fun type(material: Material): ItemType = ItemType.of(ItemStack.of(material))!!
+    private fun type(item: BukkitItemType): ItemType = ItemType.of(item.createItemStack())!!
 
-    private val cobble get() = type(Material.COBBLESTONE)
-    private val dirt get() = type(Material.DIRT)
-    private val sand get() = type(Material.SAND)
+    private val cobble get() = type(BukkitItemType.COBBLESTONE)
+    private val dirt get() = type(BukkitItemType.DIRT)
+    private val sand get() = type(BukkitItemType.SAND)
 
     @Test
     fun `the digest agrees with the cell it was taken from`() {
@@ -89,7 +89,7 @@ class CellSummaryTest {
         val compound = Compound()
         compound["total"] = 500L
         compound["types"] = 2
-        compound["previewTypes"] = arrayListOf(ItemStack.of(Material.COBBLESTONE), ItemStack.empty())
+        compound["previewTypes"] = arrayListOf(BukkitItemType.COBBLESTONE.createItemStack(), ItemStack.empty())
         compound["previewAmounts"] = arrayListOf(400L, 100L)
 
         val summary = CellSummary.fromCompound(compound)

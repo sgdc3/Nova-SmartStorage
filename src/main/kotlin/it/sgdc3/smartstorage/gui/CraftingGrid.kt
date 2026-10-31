@@ -19,6 +19,7 @@ import xyz.xenondevs.invui.item.ItemProvider
 import xyz.xenondevs.nova.util.addItemCorrectly
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
 import xyz.xenondevs.nova.util.playClickSound
+import xyz.xenondevs.nova.world.item.itemType
 
 const val CRAFTING_GRID_SIZE = 9
 
@@ -125,11 +126,11 @@ internal class CraftingGrid(
             if (stack.isEmpty)
                 continue
 
-            val remainder = stack.type.craftingRemainingItem
+            val remainder = stack.itemType.craftingRemainingItem
 
             val left = when {
                 stack.amount > 1 -> stack.clone().apply { amount -= 1 }
-                remainder != null -> ItemStack.of(remainder)
+                remainder != null -> remainder.createItemStack()
                 else -> null
             }
 
@@ -147,7 +148,7 @@ internal class CraftingGrid(
 
             // the slot could only keep one of the two, so hand the remainder over directly
             if (stack.amount > 1 && remainder != null)
-                giveToPlayer(player, ItemStack.of(remainder))
+                giveToPlayer(player, remainder.createItemStack())
         }
 
         return true

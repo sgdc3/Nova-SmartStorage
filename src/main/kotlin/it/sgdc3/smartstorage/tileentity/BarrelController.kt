@@ -1,6 +1,8 @@
 package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.gui.ClickableItem
+import it.sgdc3.smartstorage.gui.MenuContent
+import it.sgdc3.smartstorage.gui.MenuTracker
 import it.sgdc3.smartstorage.gui.TerminalContent
 import it.sgdc3.smartstorage.registry.Blocks.BARREL_CONTROLLER
 import it.sgdc3.smartstorage.registry.GuiTextures
@@ -9,7 +11,7 @@ import it.sgdc3.smartstorage.storage.SortMode
 import it.sgdc3.smartstorage.util.RateLimitedError
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import org.bukkit.Material
+import org.bukkit.block.Block
 import org.bukkit.entity.Player
 import org.bukkit.event.inventory.ClickType
 import org.bukkit.inventory.ItemStack
@@ -19,6 +21,7 @@ import xyz.xenondevs.commons.provider.Provider
 import xyz.xenondevs.commons.provider.combinedProvider
 import xyz.xenondevs.commons.provider.mutableProvider
 import xyz.xenondevs.invui.dsl.IngredientsDsl
+import xyz.xenondevs.invui.dsl.NormalSplitWindowDsl
 import xyz.xenondevs.invui.dsl.anvilWindow
 import xyz.xenondevs.invui.dsl.item
 import xyz.xenondevs.invui.dsl.scrollItemsGui
@@ -34,25 +37,26 @@ import xyz.xenondevs.nova.context.intention.BlockBreak
 import xyz.xenondevs.nova.ui.menu.item.scrollDownItem
 import xyz.xenondevs.nova.ui.menu.item.scrollUpItem
 import xyz.xenondevs.nova.ui.overlay.guitexture.DefaultGuiTextures
-import xyz.xenondevs.nova.util.CUBE_FACES
+import xyz.xenondevs.nova.ui.overlay.guitexture.getTitle
 import xyz.xenondevs.nova.util.addItemCorrectly
 import xyz.xenondevs.nova.util.component.adventure.toPlainText
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
 import xyz.xenondevs.nova.util.item.ItemUtils
 import xyz.xenondevs.nova.util.playClickSound
 import xyz.xenondevs.nova.util.serverTick
-import xyz.xenondevs.nova.world.BlockPos
-import xyz.xenondevs.nova.world.block.state.NovaBlockState
+import xyz.xenondevs.nova.world.block.NovaBlockState
+import xyz.xenondevs.nova.world.block.config
+import xyz.xenondevs.nova.world.block.novaTileEntity
 import xyz.xenondevs.nova.world.block.tileentity.NetworkedTileEntity
-import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
 import xyz.xenondevs.nova.world.block.tileentity.network.NetworkManager
 import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkConnectionType
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.inventory.NetworkedInventory
+import xyz.xenondevs.nova.world.chunkPos
 import xyz.xenondevs.nova.world.format.NetworkState
-import xyz.xenondevs.nova.world.format.WorldDataManager
 import java.util.UUID
 import kotlin.math.max
 import kotlin.math.min
+import org.bukkit.inventory.ItemType as BukkitItemType
 
 private val MAX_BARRELS by BARREL_CONTROLLER.config.entry<Int>("max_barrels")
 private val RESCAN_TICKS by BARREL_CONTROLLER.config.entry<Int>("rescan_ticks")
@@ -109,10 +113,10 @@ private val TOUCHING_OFFSETS: List<Triple<Int, Int, Int>> = buildList {
  * affordable.
  */
 class BarrelController(
-    pos: BlockPos,
+    block: Block,
     state: NovaBlockState,
     data: Compound
-) : NetworkedTileEntity(pos, state, data) {
+) : NetworkedTileEntity(block, state, data) {
 
     /**
      * The barrels this controller currently reaches, in the order the scan found them — which is
@@ -196,8 +200,8 @@ class BarrelController(
     private suspend fun syncTouchingFaces(state: NetworkState) {
         // not extractOnlyFromBelow: a wall's mouth is meant to be served by one pipe on whichever side
         // is convenient, and sides that only accept would break that
-        restrictItemFaces(state, pos, itemHolder, extractOnlyFromBelow = false)
-        touching.refresh(state, pos)
+        restrictItemFaces(state, block, itemHolder, extractOnlyFromBelow = false)
+        touching.refresh(state, block)
     }
 
     override fun handleTick() {
@@ -205,7 +209,7 @@ class BarrelController(
 
         // on a timer as well as on network updates, for the reason given in StorageBarrel.handleTick
         if (serverTick % max(1, RESCAN_TICKS) == 1)
-            NetworkManager.queueWrite(pos.chunkPos, ::syncTouchingFaces)
+            NetworkManager.queueWrite(block.chunkPos, ::syncTouchingFaces)
 
         // No controller powers this one — it is not on the storage network at all — so its screen goes
         // dark when it reaches no barrels, which is the same statement about itself that every other
@@ -254,9 +258,9 @@ class BarrelController(
         }
 
         // rebuilding the rows means walking every barrel; nothing reads them until someone is looking
-        if (menuContainer.getMenus<TileEntityMenu>().any()) {
+        if (menus.isViewed) {
             refreshEntries()
-            menuContainer.forEachMenu(BarrelControllerMenu::update)
+            menus.forEach(BarrelControllerMenu::update)
         }
     }
 
@@ -288,11 +292,11 @@ class BarrelController(
             return emptyList()
 
         val found = ArrayList<StorageBarrel>(min(limit, 16))
-        val visited = HashSet<BlockPos>()
-        val queue = ArrayDeque<BlockPos>()
+        val visited = HashSet<Block>()
+        val queue = ArrayDeque<Block>()
 
-        visited += pos
-        queue += pos
+        visited += block
+        queue += block
 
         while (queue.isNotEmpty() && found.size < limit) {
             val current = queue.removeFirst()
@@ -301,13 +305,13 @@ class BarrelController(
                 if (found.size >= limit)
                     break
 
-                val next = BlockPos(pos.world, current.x + dx, current.y + dy, current.z + dz)
+                val next = block.world.getBlockAt(current.x + dx, current.y + dy, current.z + dz)
                 if (!visited.add(next))
                     continue
-                if (!pos.world.isChunkLoaded(next.x shr 4, next.z shr 4))
+                if (!block.world.isChunkLoaded(next.x shr 4, next.z shr 4))
                     continue
 
-                val barrel = WorldDataManager.getTileEntity(next) as? StorageBarrel ?: continue
+                val barrel = next.novaTileEntity as? StorageBarrel ?: continue
                 if (!barrel.isEnabled)
                     continue
 
@@ -542,7 +546,7 @@ class BarrelController(
 
             if (taken < amount) {
                 SHORTFALL.log {
-                    "Barrel wall at $pos handed out $amount× $type but only had $taken: " +
+                    "Barrel wall at $block handed out $amount× $type but only had $taken: " +
                         "${amount - taken} item(s) were created."
                 }
             }
@@ -619,8 +623,13 @@ class BarrelController(
      * Per player rather than shared, because the search text is: two people looking at the same wall
      * must not be typing into each other's list.
      */
-    @TileEntityMenuClass
-    inner class BarrelControllerMenu(player: Player) : IndividualTileEntityMenu(player, GuiTextures.BARREL_CONTROLLER) {
+    private val menus = MenuTracker<BarrelControllerMenu>()
+
+    override val menu = menus.menu(GuiTextures.BARREL_CONTROLLER) { BarrelControllerMenu(this) }
+
+    inner class BarrelControllerMenu(private val host: NormalSplitWindowDsl) : MenuContent {
+
+        private val player = host.viewer
 
         private val statusItem = ClickableItem({ statusIcon() })
         private val filter: MutableProvider<String> = mutableProvider("")
@@ -722,7 +731,7 @@ class BarrelController(
         }
 
         private fun searchButton(): Item = item {
-            itemProvider by ItemBuilder(Material.COMPASS).setName(
+            itemProvider by ItemBuilder(BukkitItemType.COMPASS).setName(
                 Component.translatable("menu.smartstorage.terminal.search", NamedTextColor.GRAY).withoutPreFormatting()
             )
             onClick {
@@ -740,7 +749,7 @@ class BarrelController(
          */
         private fun sortButton(): Item = item {
             itemProvider by sortMode.map { mode ->
-                ItemBuilder(Material.HOPPER).setName(
+                ItemBuilder(BukkitItemType.HOPPER).setName(
                     Component.translatable(mode.localizationKey, NamedTextColor.GRAY).withoutPreFormatting()
                 )
             }
@@ -754,7 +763,7 @@ class BarrelController(
 
         private fun clearFilterButton(): Item = item {
             itemProvider by filter.map { text ->
-                ItemBuilder(Material.NAME_TAG).setName(
+                ItemBuilder(BukkitItemType.NAME_TAG).setName(
                     Component.translatable(
                         "menu.smartstorage.terminal.filter",
                         NamedTextColor.GRAY,
@@ -777,7 +786,7 @@ class BarrelController(
         private fun openSearch() {
             val window = anvilWindow(player) {
                 // Nova's own search background, so the anvil stops looking like an anvil
-                title by DefaultGuiTextures.SEARCH.component
+                title by DefaultGuiTextures.SEARCH.getTitle()
                 // Four rows and three rows of results, which is not a contradiction: InvUI requires a
                 // split window's lower gui to be exactly 9x4 because it *is* the player inventory —
                 // three rows and the hotbar — while Nova's search background only frames the three.
@@ -796,18 +805,18 @@ class BarrelController(
                 text.subscribe(filter::set)
             }
 
-            menuContainer.registerWindow(window)
+            menu.register(window)
             window.open()
         }
 
         private fun backButton(): Item = item {
-            itemProvider by ItemBuilder(Material.BARRIER).setName(
+            itemProvider by ItemBuilder(BukkitItemType.BARRIER).setName(
                 Component.translatable("menu.smartstorage.terminal.back", NamedTextColor.GRAY).withoutPreFormatting()
             )
             onClick {
                 if (clickType.isLeftClick) {
                     player.playClickSound()
-                    openWindow()
+                    host.window.get().open()
                 }
             }
         }
@@ -891,7 +900,7 @@ class BarrelController(
         private fun statusIcon(): ItemBuilder {
             val barrels = this@BarrelController.barrels
 
-            return ItemBuilder(Material.CHEST)
+            return ItemBuilder(BukkitItemType.CHEST)
                 .setName(
                     Component.translatable("menu.smartstorage.barrel_controller.title").withoutPreFormatting()
                 )

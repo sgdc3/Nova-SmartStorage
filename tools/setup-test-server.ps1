@@ -9,8 +9,8 @@
 # Usage:  pwsh -File tools/setup-test-server.ps1
 
 param(
-    [string] $PaperVersion = '26.2',
-    [string] $NovaVersion = '0.24.0'
+    [string] $PaperVersion = '26.3',
+    [string] $NovaVersion = '0.25.0-alpha.5'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -59,8 +59,8 @@ if (-not (Test-Path $novaJar)) {
 #
 # The filename comes from the API rather than being written here, so a version bump is one number.
 $modrinthAddons = @(
-    @{ Slug = 'nova-simple-upgrades'; Version = '1.11.0' }  # required
-    @{ Slug = 'nova-logistics'; Version = '0.8.0' }         # optional at runtime, wanted for testing
+    @{ Slug = 'nova-simple-upgrades'; Version = '1.12.0-alpha.2' }  # required
+    @{ Slug = 'nova-logistics'; Version = '0.9.0-alpha.3' }         # optional at runtime, wanted for testing
 )
 
 foreach ($addon in $modrinthAddons) {

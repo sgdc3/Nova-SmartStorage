@@ -10,6 +10,7 @@ import it.sgdc3.smartstorage.registry.TERMINAL_REFRESH_TICKS
 import it.sgdc3.smartstorage.storage.ItemType
 import it.sgdc3.smartstorage.storage.SortMode
 import it.sgdc3.smartstorage.storage.StorageEntry
+import org.bukkit.block.Block
 import org.bukkit.entity.Player
 import xyz.xenondevs.cbf.Compound
 import xyz.xenondevs.commons.provider.MutableProvider
@@ -18,13 +19,10 @@ import xyz.xenondevs.invui.dsl.IngredientsDsl
 import xyz.xenondevs.invui.gui.ScrollGui
 import xyz.xenondevs.invui.item.Item
 import xyz.xenondevs.invui.item.ItemProvider
-import xyz.xenondevs.nova.config.entry
-import xyz.xenondevs.nova.config.node
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
 import xyz.xenondevs.nova.util.serverTick
-import xyz.xenondevs.nova.world.BlockPos
-import xyz.xenondevs.nova.world.block.state.NovaBlockState
+import xyz.xenondevs.nova.world.block.NovaBlockState
 import xyz.xenondevs.nova.world.block.tileentity.NetworkedTileEntity
 import kotlin.math.max
 
@@ -38,10 +36,10 @@ private const val DEPOSIT_SLOTS = 8
  * the part that genuinely belongs to a block.
  */
 abstract class AbstractTerminal(
-    pos: BlockPos,
+    block: Block,
     state: NovaBlockState,
     data: Compound
-) : NetworkedTileEntity(pos, state, data), StorageEndPoint {
+) : NetworkedTileEntity(block, state, data), StorageEndPoint {
 
     override val storageHolder = StorageHolder(this)
 
@@ -74,7 +72,7 @@ abstract class AbstractTerminal(
         // without the guard every terminal ever placed does that work once a second, forever, for
         // nobody. Each menu refreshes on open so the first look is still current.
         val interval = max(1, TERMINAL_REFRESH_TICKS)
-        if (serverTick % interval == 0 && menuContainer.getMenus<TileEntityMenu>().any())
+        if (serverTick % interval == 0 && isViewed)
             refreshEntries()
     }
 
@@ -115,6 +113,12 @@ abstract class AbstractTerminal(
     }
 
     protected fun refreshEntries() = content.refresh()
+
+    /**
+     * Whether this terminal's menu is open in front of anybody — each terminal keeps its own menus, so
+     * each answers for itself.
+     */
+    protected abstract val isViewed: Boolean
 
     /**
      * The lamp that says whether a controller is keeping this terminal running — see [networkStatusIcon].

@@ -36,6 +36,9 @@ class ItemType private constructor(val stack: ItemStack) {
 
     override fun hashCode(): Int = stack.hashCode()
 
+    // the Material rather than Nova's item type, which needs the game itself loaded — and this class is
+    // unit-tested without it
+    @Suppress("NOVA_MATERIAL_USAGE")
     override fun toString(): String = "ItemType(${stack.type})"
 
     companion object {

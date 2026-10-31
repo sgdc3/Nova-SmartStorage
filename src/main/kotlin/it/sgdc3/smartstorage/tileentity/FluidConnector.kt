@@ -1,6 +1,8 @@
 package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.gui.ClickableItem
+import it.sgdc3.smartstorage.gui.MenuContent
+import it.sgdc3.smartstorage.gui.MenuTracker
 import it.sgdc3.smartstorage.gui.networkStatusIcon
 import it.sgdc3.smartstorage.gui.priorityIcon
 import it.sgdc3.smartstorage.network.DEFAULT_PRIORITY
@@ -14,36 +16,36 @@ import it.sgdc3.smartstorage.registry.Models
 import it.sgdc3.smartstorage.registry.NetworkTypes
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import org.bukkit.Material
+import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
 import org.bukkit.entity.Player
+import org.bukkit.inventory.ItemType
 import xyz.xenondevs.cbf.Compound
 import xyz.xenondevs.commons.collections.enumMap
+import xyz.xenondevs.invui.dsl.NormalSplitWindowDsl
+import xyz.xenondevs.invui.dsl.window
 import xyz.xenondevs.invui.gui.Gui
 import xyz.xenondevs.invui.item.ItemBuilder
-import xyz.xenondevs.invui.window.Window
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
-import xyz.xenondevs.nova.ui.menu.addIngredient
+import xyz.xenondevs.nova.registry.RegistryEntry
 import xyz.xenondevs.nova.ui.menu.item.AddNumberItem
 import xyz.xenondevs.nova.ui.menu.item.RemoveNumberItem
+import xyz.xenondevs.nova.ui.overlay.guitexture.getTitle
 import xyz.xenondevs.nova.util.CUBE_FACES
 import xyz.xenondevs.nova.util.NumberFormatUtils
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
 import xyz.xenondevs.nova.util.runTask
-import xyz.xenondevs.nova.world.BlockPos
-import xyz.xenondevs.nova.world.block.state.NovaBlockState
+import xyz.xenondevs.nova.world.block.NovaBlockState
+import xyz.xenondevs.nova.world.block.novaTileEntity
 import xyz.xenondevs.nova.world.block.tileentity.TileEntity
-import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
 import xyz.xenondevs.nova.world.block.tileentity.network.node.NetworkEndPoint
 import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkConnectionType
 import xyz.xenondevs.nova.world.block.tileentity.network.type.fluid.FluidType
 import xyz.xenondevs.nova.world.block.tileentity.network.type.fluid.container.NetworkedFluidContainer
 import xyz.xenondevs.nova.world.block.tileentity.network.type.fluid.holder.FluidHolder
 import xyz.xenondevs.nova.world.format.NetworkState
-import xyz.xenondevs.nova.world.format.WorldDataManager
 import xyz.xenondevs.nova.world.item.DefaultGuiItems
-import xyz.xenondevs.nova.world.item.NovaItem
 
 /**
  * Turns every tank it touches into fluid storage for the network, exactly as a [StorageConnector] does
@@ -62,10 +64,10 @@ import xyz.xenondevs.nova.world.item.NovaItem
  * shaped to answer — the tank on that side already decides it.
  */
 class FluidConnector(
-    pos: BlockPos,
+    block: Block,
     state: NovaBlockState,
     data: Compound
-) : StorageHub(pos, state, data), StorageEndPoint {
+) : StorageHub(block, state, data), StorageEndPoint {
 
     override val portModel = Models.FLUID_CONNECTOR_ATTACHMENT
     override val portModelOff = Models.FLUID_CONNECTOR_ATTACHMENT_OFF
@@ -104,7 +106,7 @@ class FluidConnector(
         refreshTanks()
 
         if (setPowered(storageNetwork?.isOnline == true))
-            menuContainer.forEachMenu(FluidConnectorMenu::update)
+            menus.forEach(FluidConnectorMenu::update)
     }
 
     override fun handleDisable() {
@@ -130,7 +132,7 @@ class FluidConnector(
         for (face in CUBE_FACES) {
             val port = ports.getValue(face)
 
-            port.mount(resolveTank(pos.advance(face)))
+            port.mount(resolveTank(block.getRelative(face)))
             if (port.isActive)
                 active += face
         }
@@ -138,7 +140,7 @@ class FluidConnector(
         fluidProviders = active.map(ports::getValue)
 
         if (setPortFaces(active))
-            menuContainer.forEachMenu(FluidConnectorMenu::update)
+            menus.forEach(FluidConnectorMenu::update)
     }
 
     /**
@@ -149,14 +151,14 @@ class FluidConnector(
      * of water, no type it will report, and no way to put lava in it — so a side is a Nova end point
      * with a tank on it, or it is nothing.
      */
-    private fun resolveTank(neighbour: BlockPos): FluidBacking? {
+    private fun resolveTank(neighbour: Block): FluidBacking? {
         // Nova's own lookup throws for a chunk it has not loaded, and a hub on a chunk border has
         // neighbours in the next one. Asking Bukkit whether the chunk is loaded neither loads it nor
         // builds anything.
-        if (!pos.world.isChunkLoaded(neighbour.x shr 4, neighbour.z shr 4))
+        if (!block.world.isChunkLoaded(neighbour.x shr 4, neighbour.z shr 4))
             return null
 
-        val tileEntity: TileEntity? = WorldDataManager.getTileEntity(neighbour)
+        val tileEntity: TileEntity? = neighbour.novaTileEntity
         // one of ours would mean the network swallowing itself
         if (tileEntity == null || tileEntity is StorageEndPoint || tileEntity !is NetworkEndPoint)
             return null
@@ -179,7 +181,7 @@ class FluidConnector(
     override suspend fun handleNetworkUpdate(state: NetworkState) = applyArms(state)
 
     private suspend fun applyArms(state: NetworkState) {
-        val connected = state.getConnectedNodes(this).row(NetworkTypes.STORAGE).keys.toSet()
+        val connected = state.getConnectedNodes(this).row(NetworkTypes.STORAGE.get()).keys.toSet()
 
         // no storage connection left means no network rebuilt us — see StorageNetworkGroup.lastTick
         if (connected.isEmpty())
@@ -334,9 +336,9 @@ class FluidConnector(
         fun icon(): ItemBuilder {
             val builder = ItemBuilder(
                 when {
-                    isActive -> Material.WATER_BUCKET
-                    backing != null -> Material.BARRIER
-                    else -> Material.GRAY_STAINED_GLASS_PANE
+                    isActive -> ItemType.WATER_BUCKET
+                    backing != null -> ItemType.BARRIER
+                    else -> ItemType.GRAY_STAINED_GLASS_PANE
                 }
             )
             builder.setName(faceName().withoutPreFormatting())
@@ -414,12 +416,12 @@ class FluidConnector(
                 .build()
 
             fun open(player: Player) {
-                val window = Window.builder()
-                    .setTitle(GuiTextures.STORAGE_CONNECTOR.getTitle(faceName()))
-                    .setUpperGui(gui)
-                    .build(player)
+                val window = window(player) {
+                    title by GuiTextures.STORAGE_CONNECTOR.getTitle(faceName())
+                    upperGui by gui
+                }
 
-                menuContainer.registerWindow(window)
+                this@FluidConnector.menu.register(window)
                 window.open()
             }
 
@@ -441,8 +443,8 @@ class FluidConnector(
                 extractItem.notifyWindows()
             }
 
-            private fun toggleIcon(on: Boolean, onItem: NovaItem, key: String): ItemBuilder =
-                (if (on) onItem else DefaultGuiItems.GRAY_BTN).createClientsideItemBuilder().setName(
+            private fun toggleIcon(on: Boolean, onItem: RegistryEntry.Paper<ItemType>, key: String): ItemBuilder =
+                ItemBuilder((if (on) onItem else DefaultGuiItems.GRAY_BTN).get()).setName(
                     Component.translatable(
                         key,
                         if (on) NamedTextColor.GREEN else NamedTextColor.GRAY,
@@ -454,8 +456,11 @@ class FluidConnector(
 
     }
 
-    @TileEntityMenuClass
-    inner class FluidConnectorMenu : GlobalTileEntityMenu(GuiTextures.STORAGE_CONNECTOR) {
+    private val menus = MenuTracker<FluidConnectorMenu>()
+
+    override val menu = menus.menu(GuiTextures.STORAGE_CONNECTOR) { FluidConnectorMenu(this) }
+
+    inner class FluidConnectorMenu(private val host: NormalSplitWindowDsl) : MenuContent {
 
         private val statusItem = ClickableItem({ statusIcon() })
         private val networkItem = ClickableItem({ networkStatusIcon(storageNetwork) })
@@ -488,7 +493,7 @@ class FluidConnector(
         }
 
         private fun statusIcon(): ItemBuilder {
-            val builder = ItemBuilder(Material.WATER_BUCKET)
+            val builder = ItemBuilder(ItemType.WATER_BUCKET)
             builder.setName(Component.translatable("menu.smartstorage.fluid_connector.title").withoutPreFormatting())
 
             val mounted = fluidProviders.size

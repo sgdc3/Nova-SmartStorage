@@ -1,7 +1,6 @@
 package it.sgdc3.smartstorage.network
 
-import org.bukkit.block.BlockFace
-import xyz.xenondevs.nova.util.CUBE_FACES
+import xyz.xenondevs.nova.util.CubeFaceSet
 import xyz.xenondevs.nova.world.block.tileentity.network.node.EndPointDataHolder
 
 /**
@@ -12,5 +11,5 @@ import xyz.xenondevs.nova.world.block.tileentity.network.node.EndPointDataHolder
  */
 class StorageHolder(
     val endPoint: StorageEndPoint,
-    override val allowedFaces: Set<BlockFace> = CUBE_FACES
+    override val allowedFaces: CubeFaceSet = CubeFaceSet.ALL
 ) : EndPointDataHolder

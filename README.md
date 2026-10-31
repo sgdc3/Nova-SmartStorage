@@ -6,7 +6,8 @@
 A [Nova](https://github.com/xenondevs/Nova) addon that brings AE2 / Refined Storage style centralized
 item storage to Paper.
 
-Built against **Nova 0.24.0** (Minecraft 26.2).
+Built against **Nova 0.25.0-alpha.5** (Minecraft 26.3). Nova 0.25 is still in alpha, so expect its API —
+and with it this addon — to move until it is released.
 
 ## What it does
 
@@ -388,15 +389,15 @@ block.
 
 ## Dependencies
 
-- **Nova** 0.24.0 — required
-- **Simple-Upgrades** — required. The controller accepts Energy and Efficiency upgrades.
-- **Logistics** — optional. Its item cables and filters work with the Storage Interface if installed;
+- **Nova** 0.25.0-alpha.5 — required
+- **Simple-Upgrades** 1.12.0-alpha.2 or later — required. The controller accepts Energy and Efficiency upgrades.
+- **Logistics** 0.9 — optional. Its item cables and filters work with the Storage Interface if installed;
   nothing breaks if it isn't.
 
 ## Installing
 
 Take `SmartStorage-*.jar` from the [latest release](https://github.com/sgdc3/Nova-SmartStorage/releases)
-and drop it into `plugins/` on a **Paper 26.2** server, beside `Nova` and `Simple_Upgrades`. Nova addons
+and drop it into `plugins/` on a **Paper 26.3** server, beside `Nova` and `Simple_Upgrades`. Nova addons
 are Paper plugins in their own right — they ship a `paper-plugin.yml` pointing at Nova's addon loader —
 so there is nothing else to install and nothing to register.
 
@@ -409,7 +410,7 @@ Nova's resource pack; without it the blocks have no textures.
 ./gradlew addonJar
 ```
 
-The jar lands in `build/libs/`. Drop it into `plugins/` on a Paper 26.2 server — Nova addons are Paper
+The jar lands in `build/libs/`. Drop it into `plugins/` on a Paper 26.3 server — Nova addons are Paper
 plugins in their own right (they ship a `paper-plugin.yml` pointing at Nova's addon loader), so they do
 **not** go in an `addons` subfolder.
 
@@ -445,15 +446,16 @@ one, or clone itself, and all three are load-bearing here.
 
 Two things about it are worth knowing before the build file surprises you. Compilation uses Origami's
 *widened server*, which is a whole Paper implementation, and that cannot sit on a test classpath beside
-MockBukkit: both register an `InternalAPIBridge` service and Paper refuses to start when it finds two. So
-the tests get `paper-api` alone. And MockBukkit ships the game's own data tables, so it only agrees with
-the Paper it was built for — its newest build targets 26.1.2 while this addon targets 26.2, and against
-26.2 it dies looking up a registry entry that did not exist yet.
+MockBukkit: both register Paper's services and Paper refuses to start when it finds two of one. So the
+tests get `paper-api` alone, with Paper's dev bundle — which the widened server is made from — left off
+their classpath. And MockBukkit ships the game's own data tables, so it only agrees with the Paper it was
+built for: the build pins both to 26.3, the same Minecraft the addon compiles against, and a version bump
+has to move them together.
 
-The tests therefore run one minor behind production. What they exercise is this addon's arithmetic, not
-Paper's item behaviour, and the API they lean on — stack sizes, similarity, cloning — is the same in
-both; `HarnessTest` asserts that much rather than assuming it. It is the file that would fail first if
-the gap ever grew into something that matters.
+What the tests exercise is this addon's arithmetic, not Paper's item behaviour, and MockBukkit is not
+Paper. The API they lean on — stack sizes, similarity, cloning — is small; `HarnessTest` asserts it rather
+than assuming it, and is the file that would fail first if the two ever disagreed about something that
+matters.
 
 ## Test server
 

@@ -1,16 +1,18 @@
 package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.gui.ClickableItem
+import it.sgdc3.smartstorage.gui.MenuContent
+import it.sgdc3.smartstorage.gui.MenuTracker
 import it.sgdc3.smartstorage.gui.networkStatusIcon
 import it.sgdc3.smartstorage.gui.priorityIcon
 import it.sgdc3.smartstorage.item.FluidCellBehavior
 import it.sgdc3.smartstorage.item.StorageCellBehavior
 import it.sgdc3.smartstorage.network.DEFAULT_PRIORITY
 import it.sgdc3.smartstorage.network.FluidProvider
-import it.sgdc3.smartstorage.network.StorageHolder
-import it.sgdc3.smartstorage.network.StorageNetwork
 import it.sgdc3.smartstorage.network.PRIORITY_RANGE
 import it.sgdc3.smartstorage.network.StorageEndPoint
+import it.sgdc3.smartstorage.network.StorageHolder
+import it.sgdc3.smartstorage.network.StorageNetwork
 import it.sgdc3.smartstorage.network.StorageProvider
 import it.sgdc3.smartstorage.registry.Blocks.DRIVE_BAY
 import it.sgdc3.smartstorage.registry.GuiTextures
@@ -21,31 +23,32 @@ import it.sgdc3.smartstorage.storage.ItemType
 import it.sgdc3.smartstorage.storage.StorageLock
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import org.bukkit.Material
+import org.bukkit.block.Block
 import org.bukkit.inventory.ItemStack
 import xyz.xenondevs.cbf.Compound
+import xyz.xenondevs.invui.dsl.NormalSplitWindowDsl
 import xyz.xenondevs.invui.gui.Gui
 import xyz.xenondevs.invui.inventory.VirtualInventory
 import xyz.xenondevs.invui.inventory.event.ItemPostUpdateEvent
 import xyz.xenondevs.invui.inventory.event.ItemPreUpdateEvent
 import xyz.xenondevs.invui.item.ItemBuilder
-import xyz.xenondevs.nova.addon.simpleupgrades.gui.OpenUpgradesItem
+import xyz.xenondevs.nova.addon.simpleupgrades.openUpgradesItem
 import xyz.xenondevs.nova.addon.simpleupgrades.storedUpgradeHolder
 import xyz.xenondevs.nova.config.entry
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
-import xyz.xenondevs.nova.util.NumberFormatUtils
-import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
-import xyz.xenondevs.nova.world.BlockPos
-import xyz.xenondevs.nova.world.block.tileentity.network.type.fluid.FluidType
-import xyz.xenondevs.nova.world.block.state.NovaBlockState
-import xyz.xenondevs.nova.world.block.tileentity.NetworkedTileEntity
 import xyz.xenondevs.nova.ui.menu.item.AddNumberItem
 import xyz.xenondevs.nova.ui.menu.item.RemoveNumberItem
-import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
+import xyz.xenondevs.nova.util.NumberFormatUtils
+import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
+import xyz.xenondevs.nova.world.block.NovaBlockState
+import xyz.xenondevs.nova.world.block.config
+import xyz.xenondevs.nova.world.block.tileentity.NetworkedTileEntity
+import xyz.xenondevs.nova.world.block.tileentity.network.type.fluid.FluidType
 import java.util.UUID
 import kotlin.concurrent.withLock
 import kotlin.math.min
+import org.bukkit.inventory.ItemType as BukkitItemType
 
 /**
  * The hard ceiling on disk slots. The inventory is always this big; slots past the current limit are
@@ -69,10 +72,10 @@ private val BASE_SLOTS by DRIVE_BAY.config.entry<Int>("base_slots")
  * it cannot be once per tick, which is what it used to be.
  */
 class DriveBay(
-    pos: BlockPos,
+    block: Block,
     state: NovaBlockState,
     data: Compound
-) : NetworkedTileEntity(pos, state, data), StorageEndPoint, StorageProvider, FluidProvider {
+) : NetworkedTileEntity(block, state, data), StorageEndPoint, StorageProvider, FluidProvider {
 
     override val storageHolder = StorageHolder(this)
 
@@ -237,7 +240,7 @@ class DriveBay(
             fluidCells[slot] = null
             fluidBehaviors[slot] = null
 
-            pos.world.dropItemNaturally(pos.location.add(0.5, 1.0, 0.5), stack)
+            block.world.dropItemNaturally(block.location.add(0.5, 1.0, 0.5), stack)
         }
 
         notifyMenus()
@@ -276,7 +279,7 @@ class DriveBay(
     }
 
     private fun notifyMenus() {
-        menuContainer.forEachMenu(DriveBayMenu::update)
+        menus.forEach(DriveBayMenu::update)
     }
 
     //</editor-fold>
@@ -495,7 +498,7 @@ class DriveBay(
         super.handleEnable()
 
         if (orphanedCells.isNotEmpty()) {
-            orphanedCells.forEach { pos.world.dropItemNaturally(pos.location.add(0.5, 1.0, 0.5), it) }
+            orphanedCells.forEach { block.world.dropItemNaturally(block.location.add(0.5, 1.0, 0.5), it) }
             orphanedCells.clear()
         }
     }
@@ -530,8 +533,11 @@ class DriveBay(
         return super.getDrops(includeSelf)
     }
 
-    @TileEntityMenuClass
-    inner class DriveBayMenu : GlobalTileEntityMenu(GuiTextures.DRIVE_BAY) {
+    private val menus = MenuTracker<DriveBayMenu>()
+
+    override val menu = menus.menu(GuiTextures.DRIVE_BAY) { DriveBayMenu(this) }
+
+    inner class DriveBayMenu(private val host: NormalSplitWindowDsl) : MenuContent {
 
         private val statusItem = ClickableItem({ statusIcon() })
 
@@ -547,7 +553,7 @@ class DriveBay(
                 ". n i . . . . . m"
             )
             .addIngredient('c', cellInventory)
-            .addIngredient('u', OpenUpgradesItem(upgradeHolder))
+            .addIngredient('u', with(host) { openUpgradesItem(upgradeHolder) })
             .addIngredient('i', statusItem)
             .addIngredient('n', networkItem)
             .addIngredient('v', priorityItem)
@@ -567,7 +573,7 @@ class DriveBay(
         }
 
         private fun statusIcon(): ItemBuilder {
-            val builder = ItemBuilder(Material.PAPER)
+            val builder = ItemBuilder(BukkitItemType.PAPER)
             builder.setName(Component.translatable("menu.smartstorage.drive_bay.title").withoutPreFormatting())
 
             val lore = ArrayList<Component>()

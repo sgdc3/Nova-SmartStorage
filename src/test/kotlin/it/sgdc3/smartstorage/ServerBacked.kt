@@ -17,14 +17,14 @@ import org.mockbukkit.mockbukkit.MockBukkit
  *
  * It is MockBukkit, standing in for Paper. That has one consequence worth stating rather than burying in
  * the build file: MockBukkit ships the game's own data tables, so it only works against the Paper it was
- * built for, and its newest build is one minor behind the one this addon compiles against. The tests
- * therefore run on Paper 26.1.2 while production runs on 26.2.
+ * built for. The build pins both to the Minecraft this addon compiles against, 26.3, and they have to
+ * move together.
  *
- * That is a real gap and it is worth being clear about which side of it these tests are on. They cover
- * this addon's arithmetic — how many items fit in a cell, which provider gets asked first, what happens
- * when a rollback comes up short. They do not cover Paper's behaviour, and they are not evidence that
- * anything works on 26.2. The API they lean on is stack sizes, similarity and cloning, which has been
- * the same for many versions; [HarnessTest] asserts that much rather than assuming it.
+ * It is worth being clear about which side of the line these tests are on. They cover this addon's
+ * arithmetic — how many items fit in a cell, which provider gets asked first, what happens when a
+ * rollback comes up short. They do not cover Paper's behaviour, and MockBukkit is not Paper. The API they
+ * lean on is stack sizes, similarity and cloning; [HarnessTest] asserts that much rather than assuming
+ * it.
  */
 @ExtendWith(ServerBackedExtension::class)
 annotation class ServerBacked

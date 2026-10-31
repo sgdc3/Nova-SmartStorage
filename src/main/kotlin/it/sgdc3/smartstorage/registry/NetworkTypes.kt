@@ -5,7 +5,7 @@ import it.sgdc3.smartstorage.network.StorageHolder
 import it.sgdc3.smartstorage.network.StorageNetwork
 import it.sgdc3.smartstorage.network.StorageNetworkGroup
 import xyz.xenondevs.commons.provider.Provider
-import xyz.xenondevs.nova.config.Configs
+import xyz.xenondevs.nova.config.CONFIGS
 import xyz.xenondevs.nova.config.entry
 import xyz.xenondevs.nova.config.node
 import xyz.xenondevs.nova.initialize.Init
@@ -14,7 +14,7 @@ import xyz.xenondevs.nova.initialize.InitStage
 /**
  * `configs/config.yml` of this addon.
  */
-internal val SMART_STORAGE_CONFIG = Configs[SmartStorage, "config"]
+internal val SMART_STORAGE_CONFIG = CONFIGS["smartstorage:config"]
 
 /**
  * How often a readout that nothing pushes to is rebuilt, in ticks.
@@ -30,8 +30,11 @@ internal val TERMINAL_REFRESH_TICKS by SMART_STORAGE_CONFIG.node("terminal").ent
  * Registers `smartstorage:storage` as a fourth network type alongside Nova's energy, item and fluid
  * networks. Doing so hands us topology discovery, network splitting and merging, chunk load and unload
  * handling and asynchronous ticking for free.
+ *
+ * Network types are a registry like any other since Nova 0.25, so this has to run before the registries
+ * are frozen — which is what PRE_PACK means for an addon.
  */
-@Init(stage = InitStage.PRE_WORLD)
+@Init(stage = InitStage.PRE_PACK)
 object NetworkTypes {
 
     val TICK_DELAY_PROVIDER: Provider<Int> = SMART_STORAGE_CONFIG.node("network").entry<Int>("tick_delay")
@@ -41,8 +44,10 @@ object NetworkTypes {
         ::StorageNetwork,
         ::StorageNetworkGroup,
         StorageNetwork::validateLocal,
-        TICK_DELAY_PROVIDER,
-        StorageHolder::class
+        { endPoint -> endPoint.holders.filterIsInstance<StorageHolder>().firstOrNull()?.let(::listOf) },
+        // read once: Nova fixes a network type's tick delay when it is registered, so changing it in the
+        // config takes a restart — the provider stays for the readers that only want to know the number
+        TICK_DELAY_PROVIDER.get()
     )
 
 }

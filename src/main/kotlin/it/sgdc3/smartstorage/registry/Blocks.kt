@@ -18,85 +18,46 @@ import it.sgdc3.smartstorage.tileentity.StorageInterface
 import it.sgdc3.smartstorage.tileentity.StorageTerminal
 import it.sgdc3.smartstorage.tileentity.WirelessAccessPoint
 import it.sgdc3.smartstorage.util.encodeFlags
-import net.minecraft.core.Direction.Axis
-import org.bukkit.Material
+import org.bukkit.Axis
+import org.bukkit.block.BlockType
+import org.bukkit.block.data.BlockData
 import xyz.xenondevs.nova.initialize.Init
 import xyz.xenondevs.nova.initialize.InitStage
+import xyz.xenondevs.nova.registry.NovaBlockBuilder
+import xyz.xenondevs.nova.registry.entries.BlockTypeEntries
+import xyz.xenondevs.nova.registry.entries.ItemTypeEntries
 import xyz.xenondevs.nova.resources.builder.layout.block.BackingStateCategory
-import xyz.xenondevs.nova.world.block.NovaTileEntityBlock
+import xyz.xenondevs.nova.resources.builder.layout.block.BlockSelectorScope
 import xyz.xenondevs.nova.world.block.TileEntityConstructor
-import xyz.xenondevs.nova.world.block.behavior.BlockSounds
-import xyz.xenondevs.nova.world.block.behavior.Breakable
 import xyz.xenondevs.nova.world.block.behavior.TileEntityDrops
 import xyz.xenondevs.nova.world.block.behavior.TileEntityInteractive
-import xyz.xenondevs.nova.world.block.behavior.TileEntityLimited
 import xyz.xenondevs.nova.world.block.sound.SoundGroup
-import xyz.xenondevs.nova.world.block.state.property.DefaultScopedBlockStateProperties
-import xyz.xenondevs.nova.world.block.state.property.ScopedBlockStateProperty
+import xyz.xenondevs.nova.world.block.state.property.DefaultBlockStateProperties
 import xyz.xenondevs.nova.world.item.tool.VanillaToolCategories
 import xyz.xenondevs.nova.world.item.tool.VanillaToolTiers
-import net.minecraft.world.level.block.Blocks as MojangBlocks
-import net.minecraft.world.level.block.state.properties.BlockStateProperties as MojangBlockStateProperties
 
 @Init(stage = InitStage.PRE_PACK)
 object Blocks {
 
-    // Declared before the blocks that use them: property initializers of an object run top to bottom,
-    // so a behavior referenced further down would still be null when the block is built.
-    private val CABLE = Breakable(0.0, requiresToolForDrops = false)
-
-    /**
-     * Shared by every machine-like block of this addon.
-     */
-    private val DEVICE = Breakable(4.0, setOf(VanillaToolCategories.PICKAXE), VanillaToolTiers.STONE, true, Material.IRON_BLOCK)
-
-    /**
-     * The barrel's own, identical to [DEVICE] but for the one flag: it drops whatever it was broken
-     * with, bare hands included.
-     *
-     * Every other block here is worth the iron it is made of, so losing one to the wrong pickaxe is the
-     * ordinary cost of mining without the right tool. A barrel is not: it carries thousands of items in
-     * its own data — see [it.sgdc3.smartstorage.tileentity.StorageBarrel.getDrops] — and "wrong tool"
-     * would quietly destroy all of them along with the block. A pickaxe still mines it faster; it just
-     * no longer decides whether the contents survive.
-     */
-    private val BARREL = Breakable(4.0, setOf(VanillaToolCategories.PICKAXE), VanillaToolTiers.STONE, false, Material.IRON_BLOCK)
-
-    val STORAGE_CABLE: NovaTileEntityBlock = tileEntity("storage_cable", ::StorageCable) {
+    val STORAGE_CABLE = tileEntity("storage_cable", ::StorageCable) {
         tickrate(0)
-        behaviors(TileEntityLimited, TileEntityDrops, CABLE, BlockSounds(SoundGroup.METAL))
+        behaviors(TileEntityDrops)
+        sounds(SoundGroup.METAL)
+        breakable(hardness = 0.0, requiresToolForDrops = false)
         stateProperties(
-            ScopedBlockStateProperties.NORTH,
-            ScopedBlockStateProperties.EAST,
-            ScopedBlockStateProperties.SOUTH,
-            ScopedBlockStateProperties.WEST,
-            ScopedBlockStateProperties.UP,
-            ScopedBlockStateProperties.DOWN
+            BlockStateProperties.NORTH,
+            BlockStateProperties.EAST,
+            BlockStateProperties.SOUTH,
+            BlockStateProperties.WEST,
+            BlockStateProperties.UP,
+            BlockStateProperties.DOWN
         )
 
-        entityBacked({
+        entityBacked(stateSelector = {
             // a chain gives straight runs a sensible collider; everything else relies on the virtual
             // hitboxes StorageCable registers, so the block itself must not block movement
-            val north = getPropertyValueOrThrow(BlockStateProperties.NORTH)
-            val east = getPropertyValueOrThrow(BlockStateProperties.EAST)
-            val south = getPropertyValueOrThrow(BlockStateProperties.SOUTH)
-            val west = getPropertyValueOrThrow(BlockStateProperties.WEST)
-            val up = getPropertyValueOrThrow(BlockStateProperties.UP)
-            val down = getPropertyValueOrThrow(BlockStateProperties.DOWN)
-
-            when {
-                east && west -> MojangBlocks.IRON_CHAIN.defaultBlockState()
-                    .setValue(MojangBlockStateProperties.AXIS, Axis.X)
-
-                north && south -> MojangBlocks.IRON_CHAIN.defaultBlockState()
-                    .setValue(MojangBlockStateProperties.AXIS, Axis.Z)
-
-                up && down -> MojangBlocks.IRON_CHAIN.defaultBlockState()
-                    .setValue(MojangBlockStateProperties.AXIS, Axis.Y)
-
-                else -> MojangBlocks.STRUCTURE_VOID.defaultBlockState()
-            }
-        }, {
+            chainOrVoid()
+        }, modelSelector = {
             val id = encodeFlags(
                 getPropertyValueOrThrow(BlockStateProperties.NORTH),
                 getPropertyValueOrThrow(BlockStateProperties.EAST),
@@ -110,19 +71,19 @@ object Blocks {
         })
     }
 
-    val STORAGE_CONTROLLER: NovaTileEntityBlock = device("storage_controller", ::StorageController)
+    val STORAGE_CONTROLLER = device("storage_controller", ::StorageController)
 
     /**
      * A tap in a cable run rather than a block beside one, so it is a hub: a core with an arm towards
      * every side it carries power to. It has no ports — there is nothing to mount it onto — which is
      * the one way it differs from the connector and the interface.
      */
-    val ENERGY_VALVE: NovaTileEntityBlock = hub("energy_valve", ::EnergyValve, coreModels = "energy_valve")
+    val ENERGY_VALVE = hub("energy_valve", ::EnergyValve, coreModels = "energy_valve")
 
-    val DRIVE_BAY: NovaTileEntityBlock = facingDevice("drive_bay", ::DriveBay)
-    val STORAGE_TERMINAL: NovaTileEntityBlock = facingDevice("storage_terminal", ::StorageTerminal)
-    val CRAFTING_TERMINAL: NovaTileEntityBlock = facingDevice("crafting_terminal", ::CraftingTerminal)
-    val FLUID_TERMINAL: NovaTileEntityBlock = facingDevice("fluid_terminal", ::FluidTerminal)
+    val DRIVE_BAY = facingDevice("drive_bay", ::DriveBay)
+    val STORAGE_TERMINAL = facingDevice("storage_terminal", ::StorageTerminal)
+    val CRAFTING_TERMINAL = facingDevice("crafting_terminal", ::CraftingTerminal)
+    val FLUID_TERMINAL = facingDevice("fluid_terminal", ::FluidTerminal)
 
     /**
      * A facing device with a second state property, so the front can carry a padlock while the barrel is
@@ -132,9 +93,10 @@ object Blocks {
      * depends on something other than which way it points, and hiding that behind a parameter would make
      * three simple blocks pay for one.
      */
-    val STORAGE_BARREL: NovaTileEntityBlock = tileEntity("storage_barrel", ::StorageBarrel) {
-        behaviors(TileEntityLimited, TileEntityDrops, TileEntityInteractive, BARREL, BlockSounds(SoundGroup.METAL))
-        stateProperties(DefaultScopedBlockStateProperties.FACING_HORIZONTAL, ScopedBlockStateProperties.LOCKED)
+    val STORAGE_BARREL = tileEntity("storage_barrel", ::StorageBarrel) {
+        behaviors(TileEntityDrops, TileEntityInteractive)
+        breakableDevice(requiresToolForDrops = false)
+        stateProperties(DefaultBlockStateProperties.FACING_HORIZONTAL, BlockStateProperties.LOCKED)
         stateBacked(BackingStateCategory.NOTE_BLOCK, BackingStateCategory.MUSHROOM_BLOCK) {
             val locked = getPropertyValueOrThrow(BlockStateProperties.LOCKED)
             getModel(if (locked) "block/storage_barrel_locked" else "block/storage_barrel").rotated()
@@ -143,16 +105,16 @@ object Blocks {
 
     // nothing about what a controller does depends on which way it points; it has a front because a
     // screen belongs on the side you look at, and for no other reason
-    val BARREL_CONTROLLER: NovaTileEntityBlock = facingDevice("barrel_controller", ::BarrelController)
+    val BARREL_CONTROLLER = facingDevice("barrel_controller", ::BarrelController)
 
-    val WIRELESS_ACCESS_POINT: NovaTileEntityBlock = device("wireless_access_point", ::WirelessAccessPoint)
+    val WIRELESS_ACCESS_POINT = device("wireless_access_point", ::WirelessAccessPoint)
 
-    val STORAGE_INTERFACE: NovaTileEntityBlock = hub("storage_interface", ::StorageInterface)
-    val STORAGE_CONNECTOR: NovaTileEntityBlock = hub("storage_connector", ::StorageConnector)
+    val STORAGE_INTERFACE = hub("storage_interface", ::StorageInterface)
+    val STORAGE_CONNECTOR = hub("storage_connector", ::StorageConnector)
 
     // the same two blocks for fluids: same shape, same six live sides, different thing flowing through
-    val FLUID_INTERFACE: NovaTileEntityBlock = hub("fluid_interface", ::FluidInterface)
-    val FLUID_CONNECTOR: NovaTileEntityBlock = hub("fluid_connector", ::FluidConnector)
+    val FLUID_INTERFACE = hub("fluid_interface", ::FluidInterface)
+    val FLUID_CONNECTOR = hub("fluid_connector", ::FluidConnector)
 
     /**
      * The name of the model a device wears right now: the lit one, or the dark twin.
@@ -166,10 +128,11 @@ object Blocks {
     /**
      * A full-cube, right-clickable machine block that looks the same from every side.
      */
-    private fun device(name: String, constructor: TileEntityConstructor): NovaTileEntityBlock =
+    private fun device(name: String, constructor: TileEntityConstructor) =
         tileEntity(name, constructor) {
-            behaviors(TileEntityLimited, TileEntityDrops, TileEntityInteractive, DEVICE, BlockSounds(SoundGroup.METAL))
-            stateProperties(ScopedBlockStateProperties.POWERED)
+            behaviors(TileEntityDrops, TileEntityInteractive)
+            breakableDevice()
+            stateProperties(BlockStateProperties.POWERED)
             stateBacked(BackingStateCategory.NOTE_BLOCK, BackingStateCategory.MUSHROOM_BLOCK) {
                 getModel(deviceModel(name, getPropertyValueOrThrow(BlockStateProperties.POWERED)))
             }
@@ -181,10 +144,11 @@ object Blocks {
      * Nova orients a placed block so that FACING points back at whoever placed it, and `rotated()` is a
      * no-op for FACING=NORTH, so the model is authored with its front on the north face.
      */
-    private fun facingDevice(name: String, constructor: TileEntityConstructor): NovaTileEntityBlock =
+    private fun facingDevice(name: String, constructor: TileEntityConstructor) =
         tileEntity(name, constructor) {
-            behaviors(TileEntityLimited, TileEntityDrops, TileEntityInteractive, DEVICE, BlockSounds(SoundGroup.METAL))
-            stateProperties(DefaultScopedBlockStateProperties.FACING_HORIZONTAL, ScopedBlockStateProperties.POWERED)
+            behaviors(TileEntityDrops, TileEntityInteractive)
+            breakableDevice()
+            stateProperties(DefaultBlockStateProperties.FACING_HORIZONTAL, BlockStateProperties.POWERED)
             stateBacked(BackingStateCategory.NOTE_BLOCK, BackingStateCategory.MUSHROOM_BLOCK) {
                 getModel(deviceModel(name, getPropertyValueOrThrow(BlockStateProperties.POWERED))).rotated()
             }
@@ -220,19 +184,20 @@ object Blocks {
          * behind the model and decides its collider — only the picture ignores them.
          */
         coreModels: String? = null
-    ): NovaTileEntityBlock =
+    ) =
         tileEntity(name, constructor) {
-            behaviors(TileEntityLimited, TileEntityDrops, TileEntityInteractive, DEVICE, BlockSounds(SoundGroup.METAL))
+            behaviors(TileEntityDrops, TileEntityInteractive)
+            breakableDevice()
             stateProperties(
-                ScopedBlockStateProperties.NORTH,
-                ScopedBlockStateProperties.EAST,
-                ScopedBlockStateProperties.SOUTH,
-                ScopedBlockStateProperties.WEST,
-                ScopedBlockStateProperties.UP,
-                ScopedBlockStateProperties.DOWN,
-                ScopedBlockStateProperties.POWERED
+                BlockStateProperties.NORTH,
+                BlockStateProperties.EAST,
+                BlockStateProperties.SOUTH,
+                BlockStateProperties.WEST,
+                BlockStateProperties.UP,
+                BlockStateProperties.DOWN,
+                BlockStateProperties.POWERED
             )
-            entityBacked({
+            entityBacked(stateSelector = {
                 // Same two backings the cable uses, and for the same reason. A chain gives a hub that
                 // runs straight through a collider along the run; anything else falls back to the
                 // structure void, whose shape is a small cube in the middle. Both are real blocks, so a
@@ -242,26 +207,8 @@ object Blocks {
                 // taken — otherwise its collider would jut out into the empty side. Taken means an arm
                 // or a port: a port reaches the block edge just as an arm does, so a connector between
                 // two chests earns its chain the same way one in the middle of a cable run does.
-                val north = getPropertyValueOrThrow(BlockStateProperties.NORTH)
-                val east = getPropertyValueOrThrow(BlockStateProperties.EAST)
-                val south = getPropertyValueOrThrow(BlockStateProperties.SOUTH)
-                val west = getPropertyValueOrThrow(BlockStateProperties.WEST)
-                val up = getPropertyValueOrThrow(BlockStateProperties.UP)
-                val down = getPropertyValueOrThrow(BlockStateProperties.DOWN)
-
-                when {
-                    east && west -> MojangBlocks.IRON_CHAIN.defaultBlockState()
-                        .setValue(MojangBlockStateProperties.AXIS, Axis.X)
-
-                    north && south -> MojangBlocks.IRON_CHAIN.defaultBlockState()
-                        .setValue(MojangBlockStateProperties.AXIS, Axis.Z)
-
-                    up && down -> MojangBlocks.IRON_CHAIN.defaultBlockState()
-                        .setValue(MojangBlockStateProperties.AXIS, Axis.Y)
-
-                    else -> MojangBlocks.STRUCTURE_VOID.defaultBlockState()
-                }
-            }, {
+                chainOrVoid()
+            }, modelSelector = {
                 if (coreModels != null) {
                     val lit = if (getPropertyValueOrThrow(BlockStateProperties.POWERED)) "" else "_off"
                     return@entityBacked getModel("block/$coreModels/core$lit")
@@ -284,5 +231,47 @@ object Blocks {
                 getModel("block/cable/$id")
             })
         }
+
+    /**
+     * What stands behind a cable or a hub: a chain along a run that passes straight through, the
+     * structure void — a small cube in the middle — otherwise.
+     */
+    private fun BlockSelectorScope.chainOrVoid(): BlockData {
+        val north = getPropertyValueOrThrow(BlockStateProperties.NORTH)
+        val east = getPropertyValueOrThrow(BlockStateProperties.EAST)
+        val south = getPropertyValueOrThrow(BlockStateProperties.SOUTH)
+        val west = getPropertyValueOrThrow(BlockStateProperties.WEST)
+        val up = getPropertyValueOrThrow(BlockStateProperties.UP)
+        val down = getPropertyValueOrThrow(BlockStateProperties.DOWN)
+
+        return when {
+            east && west -> BlockType.IRON_CHAIN.createBlockData().apply { axis = Axis.X }
+            north && south -> BlockType.IRON_CHAIN.createBlockData().apply { axis = Axis.Z }
+            up && down -> BlockType.IRON_CHAIN.createBlockData().apply { axis = Axis.Y }
+            else -> BlockType.STRUCTURE_VOID.createBlockData()
+        }
+    }
+
+    /**
+     * Shared by every machine-like block of this addon.
+     *
+     * The barrel passes `requiresToolForDrops = false` and is otherwise identical. Every other block here
+     * is worth the iron it is made of, so losing one to the wrong pickaxe is the ordinary cost of mining
+     * without the right tool. A barrel is not: it carries thousands of items in its own data — see
+     * [it.sgdc3.smartstorage.tileentity.StorageBarrel.getDrops] — and "wrong tool" would quietly destroy
+     * all of them along with the block. A pickaxe still mines it faster; it just no longer decides
+     * whether the contents survive.
+     */
+    private fun NovaBlockBuilder.breakableDevice(requiresToolForDrops: Boolean = true) {
+        sounds(SoundGroup.METAL)
+        breakable(
+            hardness = 4.0,
+            toolCategories = setOf(VanillaToolCategories.PICKAXE),
+            toolTier = VanillaToolTiers.STONE,
+            requiresToolForDrops = requiresToolForDrops,
+            hitParticles = ItemTypeEntries.IRON_BLOCK,
+            breakParticles = BlockTypeEntries.IRON_BLOCK
+        )
+    }
 
 }

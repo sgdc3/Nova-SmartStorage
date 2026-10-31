@@ -1,9 +1,10 @@
 package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.gui.ClickableItem
+import it.sgdc3.smartstorage.gui.MenuContent
+import it.sgdc3.smartstorage.gui.MenuTracker
 import it.sgdc3.smartstorage.gui.networkStatusIcon
 import it.sgdc3.smartstorage.gui.priorityIcon
-import it.sgdc3.smartstorage.network.DEFAULT_PRIORITY
 import it.sgdc3.smartstorage.network.FluidGateway
 import it.sgdc3.smartstorage.network.NetworkFluidView
 import it.sgdc3.smartstorage.network.PRIORITY_RANGE
@@ -15,42 +16,47 @@ import it.sgdc3.smartstorage.registry.Blocks.FLUID_INTERFACE
 import it.sgdc3.smartstorage.registry.GuiTextures
 import it.sgdc3.smartstorage.registry.Models
 import it.sgdc3.smartstorage.registry.NetworkTypes
+import it.sgdc3.smartstorage.util.nearbyNodes
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import org.bukkit.Material
+import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
 import org.bukkit.entity.Player
+import org.bukkit.inventory.ItemType
 import xyz.xenondevs.cbf.Compound
 import xyz.xenondevs.commons.collections.enumMap
 import xyz.xenondevs.commons.collections.toEnumSet
+import xyz.xenondevs.invui.dsl.NormalSplitWindowDsl
+import xyz.xenondevs.invui.dsl.window
 import xyz.xenondevs.invui.gui.Gui
 import xyz.xenondevs.invui.item.ItemBuilder
-import xyz.xenondevs.invui.window.Window
-import xyz.xenondevs.nova.addon.simpleupgrades.gui.OpenUpgradesItem
+import xyz.xenondevs.nova.addon.simpleupgrades.openUpgradesItem
 import xyz.xenondevs.nova.addon.simpleupgrades.registry.UpgradeTypes
 import xyz.xenondevs.nova.addon.simpleupgrades.storedUpgradeHolder
 import xyz.xenondevs.nova.config.entry
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
+import xyz.xenondevs.nova.registry.RegistryEntry
 import xyz.xenondevs.nova.ui.menu.item.AddNumberItem
 import xyz.xenondevs.nova.ui.menu.item.RemoveNumberItem
+import xyz.xenondevs.nova.ui.overlay.guitexture.getTitle
 import xyz.xenondevs.nova.util.CUBE_FACES
+import xyz.xenondevs.nova.util.CubeFaceMap
 import xyz.xenondevs.nova.util.NumberFormatUtils
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
 import xyz.xenondevs.nova.util.runTask
 import xyz.xenondevs.nova.util.serverTick
-import xyz.xenondevs.nova.world.BlockPos
-import xyz.xenondevs.nova.world.block.state.NovaBlockState
-import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
+import xyz.xenondevs.nova.world.block.NovaBlockState
+import xyz.xenondevs.nova.world.block.config
 import xyz.xenondevs.nova.world.block.tileentity.network.NetworkManager
 import xyz.xenondevs.nova.world.block.tileentity.network.node.NetworkEndPoint
 import xyz.xenondevs.nova.world.block.tileentity.network.type.DefaultNetworkTypes.FLUID
 import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkConnectionType
 import xyz.xenondevs.nova.world.block.tileentity.network.type.fluid.FluidType
 import xyz.xenondevs.nova.world.block.tileentity.network.type.fluid.holder.FluidHolder
+import xyz.xenondevs.nova.world.chunkPos
 import xyz.xenondevs.nova.world.format.NetworkState
 import xyz.xenondevs.nova.world.item.DefaultGuiItems
-import xyz.xenondevs.nova.world.item.NovaItem
 import java.util.UUID
 import kotlin.math.max
 import kotlin.math.roundToLong
@@ -86,10 +92,10 @@ private val BASE_TRANSFER by FLUID_INTERFACE.config.entry<Double>("base_transfer
  * [TransferBudget]; Speed Upgrades raise it.
  */
 class FluidInterface(
-    pos: BlockPos,
+    block: Block,
     state: NovaBlockState,
     data: Compound
-) : StorageHub(pos, state, data), StorageEndPoint, FluidGateway {
+) : StorageHub(block, state, data), StorageEndPoint, FluidGateway {
 
     override val portModel = Models.FLUID_INTERFACE_ATTACHMENT
     override val portModelOff = Models.FLUID_INTERFACE_ATTACHMENT_OFF
@@ -129,7 +135,7 @@ class FluidInterface(
     private val fluidHolder = storedFluidHolder(
         fluidViews.first() to NetworkConnectionType.BUFFER,
         *fluidViews.drop(1).map { it to NetworkConnectionType.BUFFER }.toTypedArray(),
-        defaultConnectionConfig = { CUBE_FACES.associateWithTo(enumMap()) { NetworkConnectionType.INSERT } }
+        defaultConnectionConfig = CubeFaceMap { NetworkConnectionType.INSERT }
     )
 
     private val portMenus = enumMap<BlockFace, PortMenu>()
@@ -148,13 +154,13 @@ class FluidInterface(
         super.handleEnable()
         // see StorageInterface.syncAllowedFaces: a closed face Nova still holds a connection to makes its
         // network builder throw, and that takes every other network down with it
-        NetworkManager.queueWrite(pos.chunkPos, ::syncAllowedFaces)
+        NetworkManager.queueWrite(block.chunkPos, ::syncAllowedFaces)
     }
 
     private suspend fun syncAllowedFaces(state: NetworkState) {
         for (face in CUBE_FACES) {
             if (fluidHolder.connectionConfig[face] == NetworkConnectionType.NONE)
-                state.handleEndPointAllowedFacesChange(this, FLUID, face)
+                state.handleEndPointAllowedFacesChange(this, FLUID.get(), face)
         }
     }
 
@@ -166,19 +172,19 @@ class FluidInterface(
         refillBudgets()
 
         if (setPowered(storageNetwork?.isOnline == true))
-            menuContainer.forEachMenu(FluidInterfaceMenu::update)
+            menus.forEach(FluidInterfaceMenu::update)
 
         if (serverTick % max(1, NEIGHBOUR_RESCAN_TICKS) != 0)
             return
 
-        NetworkManager.queueRead(pos.chunkPos) { state ->
+        NetworkManager.queueRead(block.chunkPos) { state ->
             val attached = neighbours(state)
             if (attached == attachedFaces)
                 return@queueRead
 
             attachedFaces = attached
             runTask {
-                menuContainer.forEachMenu(FluidInterfaceMenu::update)
+                menus.forEach(FluidInterfaceMenu::update)
                 portMenus.values.forEach(PortMenu::update)
             }
         }
@@ -202,14 +208,14 @@ class FluidInterface(
 
     private suspend fun applyConnections(state: NetworkState) {
         val connected = state.getConnectedNodes(this)
-        val arms = connected.row(NetworkTypes.STORAGE).keys.toEnumSet()
+        val arms = connected.row(NetworkTypes.STORAGE.get()).keys.toEnumSet()
 
         val ports = HashSet<BlockFace>()
-        for ((face, node) in connected.row(FLUID)) {
+        for ((face, node) in connected.row(FLUID.get())) {
             if (node !is NetworkEndPoint)
                 continue
 
-            val type = fluidHolder.connectionConfig[face] ?: continue
+            val type = fluidHolder.connectionConfig[face]
             if (type.insert || type.extract)
                 ports += face
         }
@@ -226,7 +232,7 @@ class FluidInterface(
 
             setArmFaces(arms)
             setPortFaces(ports)
-            menuContainer.forEachMenu(FluidInterfaceMenu::update)
+            menus.forEach(FluidInterfaceMenu::update)
         }
     }
 
@@ -235,7 +241,7 @@ class FluidInterface(
      * from the connected ones — see [StorageInterface.neighbours] for why that distinction matters.
      */
     private fun neighbours(state: NetworkState): Set<BlockFace> =
-        state.getNearbyNodes(pos, CUBE_FACES)
+        state.nearbyNodes(block)
             .filterValues { node -> node is NetworkEndPoint && node.holders.any { it is FluidHolder } }
             .keys
             .toEnumSet()
@@ -257,7 +263,7 @@ class FluidInterface(
     private fun portMenu(face: BlockFace): PortMenu = portMenus.getOrPut(face) { PortMenu(face) }
 
     private fun priorityOf(face: BlockFace): Int =
-        fluidHolder.insertPriorities[face] ?: DEFAULT_PRIORITY
+        fluidHolder.insertPriorities[face]
 
     private fun faceName(face: BlockFace): Component = Component.translatable(
         "menu.smartstorage.side",
@@ -268,15 +274,15 @@ class FluidInterface(
      * What a side is doing, shown both as its own menu's summary and as its entry in the block's menu.
      */
     private fun faceIcon(face: BlockFace): ItemBuilder {
-        val config = fluidHolder.connectionConfig[face] ?: NetworkConnectionType.NONE
+        val config = fluidHolder.connectionConfig[face]
         val open = config != NetworkConnectionType.NONE
         val attached = face in attachedFaces
 
         val builder = ItemBuilder(
             when {
-                attached && open -> Material.WATER_BUCKET
-                attached -> Material.BARRIER
-                else -> Material.GRAY_STAINED_GLASS_PANE
+                attached && open -> ItemType.WATER_BUCKET
+                attached -> ItemType.BARRIER
+                else -> ItemType.GRAY_STAINED_GLASS_PANE
             }
         )
         builder.setName(faceName(face).withoutPreFormatting())
@@ -374,12 +380,12 @@ class FluidInterface(
             .build()
 
         fun open(player: Player) {
-            val window = Window.builder()
-                .setTitle(GuiTextures.INTERFACE_SIDE.getTitle(faceName(face)))
-                .setUpperGui(gui)
-                .build(player)
+            val window = window(player) {
+                title by GuiTextures.INTERFACE_SIDE.getTitle(faceName(face))
+                upperGui by gui
+            }
 
-            menuContainer.registerWindow(window)
+            this@FluidInterface.menu.register(window)
             window.open()
         }
 
@@ -392,22 +398,22 @@ class FluidInterface(
         }
 
         private fun config(): NetworkConnectionType =
-            fluidHolder.connectionConfig[face] ?: NetworkConnectionType.NONE
+            fluidHolder.connectionConfig[face]
 
         /**
          * Both of Nova's per-face priorities together, because the menu shows one number and a player
          * who only ever sees one must not be ordered by another they never touched.
          */
         private fun setPriority(value: Int) {
-            NetworkManager.queueWrite(pos.chunkPos) { state ->
-                fluidHolder.insertPriorities[face] = value
-                fluidHolder.extractPriorities[face] = value
+            NetworkManager.queueWrite(block.chunkPos) { state ->
+                fluidHolder.insertPriorities = fluidHolder.insertPriorities.with(face, value)
+                fluidHolder.extractPriorities = fluidHolder.extractPriorities.with(face, value)
 
-                state.getNetwork(this@FluidInterface, FLUID, face)?.markDirty()
+                state.getNetwork(this@FluidInterface, FLUID.get(), face)?.markDirty()
 
                 runTask {
                     update()
-                    menuContainer.forEachMenu(FluidInterfaceMenu::update)
+                    menus.forEach(FluidInterfaceMenu::update)
                 }
             }
         }
@@ -421,15 +427,18 @@ class FluidInterface(
          * still holds a connection to makes its builder throw.
          */
         private fun toggle(insert: Boolean) {
-            NetworkManager.queueWrite(pos.chunkPos) { state ->
+            NetworkManager.queueWrite(block.chunkPos) { state ->
                 val current = config()
-                fluidHolder.connectionConfig[face] = if (insert)
-                    NetworkConnectionType.of(!current.insert, current.extract)
-                else
-                    NetworkConnectionType.of(current.insert, !current.extract)
+                fluidHolder.connectionConfig = fluidHolder.connectionConfig.with(
+                    face,
+                    if (insert)
+                        NetworkConnectionType.of(!current.insert, current.extract)
+                    else
+                        NetworkConnectionType.of(current.insert, !current.extract)
+                )
 
-                state.getNetwork(this@FluidInterface, FLUID, face)?.markDirty()
-                state.handleEndPointAllowedFacesChange(this@FluidInterface, FLUID, face)
+                state.getNetwork(this@FluidInterface, FLUID.get(), face)?.markDirty()
+                state.handleEndPointAllowedFacesChange(this@FluidInterface, FLUID.get(), face)
 
                 applyConnections(state)
                 runTask(::update)
@@ -441,21 +450,21 @@ class FluidInterface(
          * because Nova's fluid list is what decides how many there are.
          */
         private fun cycleFluid() {
-            NetworkManager.queueWrite(pos.chunkPos) { state ->
+            NetworkManager.queueWrite(block.chunkPos) { state ->
                 val current = fluidHolder.containerConfig[face]
                 val index = fluidViews.indexOfFirst { it === current }
-                fluidHolder.containerConfig[face] = fluidViews[(index + 1).mod(fluidViews.size)]
+                fluidHolder.containerConfig = fluidHolder.containerConfig.with(face, fluidViews[(index + 1).mod(fluidViews.size)])
 
-                state.getNetwork(this@FluidInterface, FLUID, face)?.markDirty()
-                state.handleEndPointAllowedFacesChange(this@FluidInterface, FLUID, face)
+                state.getNetwork(this@FluidInterface, FLUID.get(), face)?.markDirty()
+                state.handleEndPointAllowedFacesChange(this@FluidInterface, FLUID.get(), face)
 
                 applyConnections(state)
                 runTask(::update)
             }
         }
 
-        private fun toggleIcon(on: Boolean, onItem: NovaItem, key: String): ItemBuilder =
-            (if (on) onItem else DefaultGuiItems.GRAY_BTN).createClientsideItemBuilder().setName(
+        private fun toggleIcon(on: Boolean, onItem: RegistryEntry.Paper<ItemType>, key: String): ItemBuilder =
+            ItemBuilder((if (on) onItem else DefaultGuiItems.GRAY_BTN).get()).setName(
                 Component.translatable(
                     key,
                     if (on) NamedTextColor.GREEN else NamedTextColor.GRAY,
@@ -471,7 +480,7 @@ class FluidInterface(
             val fluid = faceFluid(face)
             val flowing = fluid != null && config() != NetworkConnectionType.NONE
 
-            return (if (flowing) ItemBuilder(fluid.bucket) else ItemBuilder(Material.BUCKET))
+            return (if (flowing) ItemBuilder(fluid.bucket) else ItemBuilder(ItemType.BUCKET))
                 .setName(
                     Component.translatable(
                         "menu.smartstorage.port.fluid_kind",
@@ -487,8 +496,11 @@ class FluidInterface(
 
     }
 
-    @TileEntityMenuClass
-    inner class FluidInterfaceMenu : GlobalTileEntityMenu(GuiTextures.STORAGE_INTERFACE) {
+    private val menus = MenuTracker<FluidInterfaceMenu>()
+
+    override val menu = menus.menu(GuiTextures.STORAGE_INTERFACE) { FluidInterfaceMenu(this) }
+
+    inner class FluidInterfaceMenu(private val host: NormalSplitWindowDsl) : MenuContent {
 
         private val statusItem = ClickableItem({ statusIcon() })
         private val networkItem = ClickableItem({ networkStatusIcon(storageNetwork) })
@@ -503,7 +515,7 @@ class FluidInterface(
                 "n i . 1 2 3 4 5 6",
                 ". . . . . . . . ."
             )
-            .addIngredient('u', OpenUpgradesItem(upgradeHolder))
+            .addIngredient('u', with(host) { openUpgradesItem(upgradeHolder) })
             .addIngredient('i', statusItem)
             .addIngredient('n', networkItem)
             .addIngredient('1', faceItems[0])
@@ -523,7 +535,7 @@ class FluidInterface(
         private fun statusIcon(): ItemBuilder {
             val served = servedFaces.size
 
-            val builder = ItemBuilder(Material.WATER_BUCKET)
+            val builder = ItemBuilder(ItemType.WATER_BUCKET)
             builder.setName(Component.translatable("menu.smartstorage.fluid_interface.title").withoutPreFormatting())
             builder.setLore(
                 listOf(

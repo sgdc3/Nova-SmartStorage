@@ -2,22 +2,23 @@ package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.registry.BlockStateProperties
 import it.sgdc3.smartstorage.util.boxTowards
+import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
 import org.bukkit.entity.Player
+import org.bukkit.inventory.ItemType
 import org.joml.Math
 import org.joml.Quaternionf
 import org.joml.Vector3d
 import xyz.xenondevs.cbf.Compound
 import xyz.xenondevs.commons.collections.toEnumSet
+import xyz.xenondevs.nova.registry.RegistryEntry
 import xyz.xenondevs.nova.util.add
 import xyz.xenondevs.nova.util.pitch
 import xyz.xenondevs.nova.util.yaw
-import xyz.xenondevs.nova.world.BlockPos
+import xyz.xenondevs.nova.world.block.NovaBlockState
 import xyz.xenondevs.nova.world.block.hitbox.Hitbox
 import xyz.xenondevs.nova.world.block.hitbox.VirtualHitbox
-import xyz.xenondevs.nova.world.block.state.NovaBlockState
 import xyz.xenondevs.nova.world.block.tileentity.NetworkedTileEntity
-import xyz.xenondevs.nova.world.item.NovaItem
 import xyz.xenondevs.nova.world.model.FixedMultiModel
 import xyz.xenondevs.nova.world.model.Model
 
@@ -38,10 +39,10 @@ import xyz.xenondevs.nova.world.model.Model
  * whole hub.
  */
 abstract class StorageHub(
-    pos: BlockPos,
+    block: Block,
     state: NovaBlockState,
     data: Compound
-) : NetworkedTileEntity(pos, state, data) {
+) : NetworkedTileEntity(block, state, data) {
 
     /**
      * The hidden items whose models a port is drawn with, lit and dark, from
@@ -51,8 +52,8 @@ abstract class StorageHub(
      * Null for a hub that mounts onto nothing — a valve in a cable run has arms and no ports, and
      * inventing an attachment it never draws would be a worse answer than saying it has none.
      */
-    protected open val portModel: NovaItem? = null
-    protected open val portModelOff: NovaItem? = null
+    protected open val portModel: RegistryEntry.Paper<ItemType>? = null
+    protected open val portModelOff: RegistryEntry.Paper<ItemType>? = null
 
     /**
      * The hub's own core, lit and dark, when it is drawn as a display entity rather than as part of the
@@ -67,8 +68,8 @@ abstract class StorageHub(
      * its own core on top — which is sixty-four models shared between five blocks instead of a hundred
      * and twenty-eight apiece.
      */
-    protected open val coreModel: NovaItem? = null
-    protected open val coreModelOff: NovaItem? = null
+    protected open val coreModel: RegistryEntry.Paper<ItemType>? = null
+    protected open val coreModelOff: RegistryEntry.Paper<ItemType>? = null
 
     private val multiModel = FixedMultiModel()
     private var portFaces: Set<BlockFace> = emptySet()
@@ -120,7 +121,7 @@ abstract class StorageHub(
      * opens its main menu.
      */
     protected open fun openPortMenu(player: Player, face: BlockFace) {
-        menuContainer.openWindow(player)
+        menu.open(player)
     }
 
     //<editor-fold desc="arms", defaultstate="collapsed">
@@ -150,17 +151,15 @@ abstract class StorageHub(
     private fun applyBlockState() {
         val occupied = armFaces + portFaces
         updateBlockState(
-            block.defaultBlockState.with(
-                mapOf(
-                    BlockStateProperties.NORTH to (BlockFace.NORTH in occupied),
-                    BlockStateProperties.EAST to (BlockFace.EAST in occupied),
-                    BlockStateProperties.SOUTH to (BlockFace.SOUTH in occupied),
-                    BlockStateProperties.WEST to (BlockFace.WEST in occupied),
-                    BlockStateProperties.UP to (BlockFace.UP in occupied),
-                    BlockStateProperties.DOWN to (BlockFace.DOWN in occupied),
-                    BlockStateProperties.POWERED to powered
-                )
-            )
+            blockState.apply {
+                this[BlockStateProperties.NORTH] = BlockFace.NORTH in occupied
+                this[BlockStateProperties.EAST] = BlockFace.EAST in occupied
+                this[BlockStateProperties.SOUTH] = BlockFace.SOUTH in occupied
+                this[BlockStateProperties.WEST] = BlockFace.WEST in occupied
+                this[BlockStateProperties.UP] = BlockFace.UP in occupied
+                this[BlockStateProperties.DOWN] = BlockFace.DOWN in occupied
+                this[BlockStateProperties.POWERED] = powered
+            }
         )
     }
 
@@ -205,7 +204,7 @@ abstract class StorageHub(
      * is what a connector and an interface want: their ports are all alike because the thing that varies
      * is the hub. A valve overrides it, because its sides are decided one at a time.
      */
-    protected open fun portModelFor(face: BlockFace): NovaItem? =
+    protected open fun portModelFor(face: BlockFace): RegistryEntry.Paper<ItemType>? =
         if (powered) portModel else portModelOff
 
     /**
@@ -222,8 +221,8 @@ abstract class StorageHub(
                 val item = portModelFor(face) ?: return@mapNotNullTo null
 
                 Model(
-                    item.createClientsideItemBuilder().get(),
-                    pos.location.add(0.5, 0.5, 0.5),
+                    item.get(),
+                    block.location.add(0.5, 0.5, 0.5),
                     // the port model is authored pointing south while a display entity turns a model's
                     // north side south, so an unrotated port already points north — this is the
                     // difference from there
@@ -235,7 +234,7 @@ abstract class StorageHub(
 
         // unrotated: a core is a cube in the middle and looks the same whichever way it is turned
         (if (powered) coreModel else coreModelOff)?.let { core ->
-            models += Model(core.createClientsideItemBuilder().get(), pos.location.add(0.5, 0.5, 0.5))
+            models += Model(core.get(), block.location.add(0.5, 0.5, 0.5))
         }
 
         multiModel.replaceModels(models)
@@ -254,7 +253,7 @@ abstract class StorageHub(
         hitboxes.forEach(Hitbox<*, *>::remove)
 
         val boxes = portFaces.mapTo(HashSet<Hitbox<*, *>>()) { face ->
-            val (from, to) = pos.boxTowards(Vector3d(0.125, 0.125, 0.875), Vector3d(0.875, 0.875, 1.0), face)
+            val (from, to) = block.boxTowards(Vector3d(0.125, 0.125, 0.875), Vector3d(0.875, 0.875, 1.0), face)
             VirtualHitbox(from, to).apply {
                 addRightClickHandler { player, _ -> openPortMenu(player, face) }
             }

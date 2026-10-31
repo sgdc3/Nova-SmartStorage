@@ -7,16 +7,19 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
+import org.bukkit.inventory.ItemType
 import xyz.xenondevs.cbf.Compound
+import xyz.xenondevs.nova.config.ConfigProvider
 import xyz.xenondevs.nova.config.entry
+import xyz.xenondevs.nova.registry.RegistryEntry
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
 import xyz.xenondevs.nova.util.item.ItemUtils
-import xyz.xenondevs.nova.util.item.novaItem
 import xyz.xenondevs.nova.util.item.retrieveData
 import xyz.xenondevs.nova.util.item.storeData
-import xyz.xenondevs.nova.world.item.NovaItem
 import xyz.xenondevs.nova.world.item.behavior.ItemBehavior
 import xyz.xenondevs.nova.world.item.behavior.ItemBehaviorFactory
+import xyz.xenondevs.nova.world.item.getBehaviorOrNull
+import xyz.xenondevs.nova.world.item.itemType
 
 /**
  * Turns an item into a storage cell and carries its tier limits.
@@ -24,10 +27,10 @@ import xyz.xenondevs.nova.world.item.behavior.ItemBehaviorFactory
  * The contents travel with the item — pull a cell out of a drive bay, walk it across the map, drop it
  * into another bay and everything is still there.
  */
-class StorageCellBehavior(item: NovaItem) : ItemBehavior {
+class StorageCellBehavior(config: ConfigProvider) : ItemBehavior {
 
-    val maxTypes: Int by item.config.entry<Int>("max_types")
-    val maxItems: Long by item.config.entry<Long>("max_items")
+    val maxTypes: Int by config.entry<Int>("max_types")
+    val maxItems: Long by config.entry<Long>("max_items")
 
     /**
      * Reads the contents [itemStack] carries, using this behavior's tier limits.
@@ -95,13 +98,13 @@ class StorageCellBehavior(item: NovaItem) : ItemBehavior {
         private const val SUMMARY_KEY = "cell_summary"
         private const val PREVIEW_ENTRIES = 5
 
-        override fun create(item: NovaItem) = StorageCellBehavior(item)
+        override fun create(entry: RegistryEntry.Paper<ItemType>, config: ConfigProvider) = StorageCellBehavior(config)
 
         /**
          * The cell behavior of [itemStack], or null if it isn't a storage cell.
          */
         fun of(itemStack: ItemStack?): StorageCellBehavior? =
-            itemStack?.novaItem?.getBehaviorOrNull<StorageCellBehavior>()
+            itemStack?.itemType?.getBehaviorOrNull<StorageCellBehavior>()
 
     }
 

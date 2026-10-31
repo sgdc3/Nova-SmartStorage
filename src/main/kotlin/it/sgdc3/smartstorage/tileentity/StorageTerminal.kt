@@ -1,34 +1,44 @@
 package it.sgdc3.smartstorage.tileentity
 
+import it.sgdc3.smartstorage.gui.MenuContent
+import it.sgdc3.smartstorage.gui.MenuTracker
 import it.sgdc3.smartstorage.registry.GuiTextures
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import org.bukkit.Material
-import org.bukkit.entity.Player
+import org.bukkit.block.Block
+import org.bukkit.inventory.ItemType
 import xyz.xenondevs.cbf.Compound
+import xyz.xenondevs.invui.dsl.NormalSplitWindowDsl
 import xyz.xenondevs.invui.dsl.anvilWindow
 import xyz.xenondevs.invui.dsl.item
 import xyz.xenondevs.invui.dsl.with
 import xyz.xenondevs.invui.item.Item
 import xyz.xenondevs.invui.item.ItemBuilder
 import xyz.xenondevs.nova.ui.overlay.guitexture.DefaultGuiTextures
+import xyz.xenondevs.nova.ui.overlay.guitexture.getTitle
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
 import xyz.xenondevs.nova.util.playClickSound
-import xyz.xenondevs.nova.world.BlockPos
-import xyz.xenondevs.nova.world.block.state.NovaBlockState
-import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
+import xyz.xenondevs.nova.world.block.NovaBlockState
 
 /**
  * The window into a storage network: search, sort, take out, put in.
  */
 class StorageTerminal(
-    pos: BlockPos,
+    block: Block,
     state: NovaBlockState,
     data: Compound
-) : AbstractTerminal(pos, state, data) {
+) : AbstractTerminal(block, state, data) {
 
-    @TileEntityMenuClass
-    inner class StorageTerminalMenu(player: Player) : IndividualTileEntityMenu(player, GuiTextures.STORAGE_TERMINAL) {
+    private val menus = MenuTracker<StorageTerminalMenu>()
+
+    override val isViewed: Boolean
+        get() = menus.isViewed
+
+    override val menu = menus.menu(GuiTextures.STORAGE_TERMINAL) { StorageTerminalMenu(this) }
+
+    inner class StorageTerminalMenu(private val host: NormalSplitWindowDsl) : MenuContent {
+
+        private val player = host.viewer
 
         private val filter = searchState()
         private val sortMode = sortState()
@@ -56,12 +66,13 @@ class StorageTerminal(
         init {
             // load-bearing since the tile entity stopped rebuilding the index for nobody: this is what
             // makes the first look current. The gui is bound to the provider rather than to a snapshot
-            // of it, so refreshing after building it is enough.
-            refreshEntries()
+            // of it, so refreshing as the window opens is enough — on every opening, since Nova keeps a
+            // closed window around for a while and hands the same one back.
+            host.onOpen { refreshEntries() }
         }
 
         private fun searchButton(): Item = item {
-            itemProvider by ItemBuilder(Material.COMPASS).setName(
+            itemProvider by ItemBuilder(ItemType.COMPASS).setName(
                 Component.translatable("menu.smartstorage.terminal.search", NamedTextColor.GRAY).withoutPreFormatting()
             )
             onClick {
@@ -79,7 +90,7 @@ class StorageTerminal(
         private fun openSearch() {
             val window = anvilWindow(player) {
                 // Nova's own search background, so the anvil stops looking like an anvil
-                title by DefaultGuiTextures.SEARCH.component
+                title by DefaultGuiTextures.SEARCH.getTitle()
                 // Four rows and three rows of results. InvUI requires a split window's lower gui to be
                 // exactly 9x4 — it *is* the player inventory, three rows and the hotbar — while Nova's
                 // search background frames only the three. The hotbar row sits below the panel, so it
@@ -97,18 +108,18 @@ class StorageTerminal(
                 text.subscribe(filter::set)
             }
 
-            menuContainer.registerWindow(window)
+            menu.register(window)
             window.open()
         }
 
         private fun backButton(): Item = item {
-            itemProvider by ItemBuilder(Material.BARRIER).setName(
+            itemProvider by ItemBuilder(ItemType.BARRIER).setName(
                 Component.translatable("menu.smartstorage.terminal.back", NamedTextColor.GRAY).withoutPreFormatting()
             )
             onClick {
                 if (clickType.isLeftClick) {
                     player.playClickSound()
-                    openWindow()
+                    host.window.get().open()
                 }
             }
         }

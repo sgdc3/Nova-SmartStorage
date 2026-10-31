@@ -4,6 +4,7 @@ import it.sgdc3.smartstorage.registry.BlockStateProperties
 import it.sgdc3.smartstorage.registry.NetworkTypes
 import it.sgdc3.smartstorage.util.boxTowards
 import it.sgdc3.smartstorage.util.destructionHitbox
+import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
 import org.joml.Vector3d
 import xyz.xenondevs.cbf.Compound
@@ -11,12 +12,11 @@ import xyz.xenondevs.commons.collections.toEnumSet
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
 import xyz.xenondevs.nova.context.intention.BlockPlace
-import xyz.xenondevs.nova.util.CUBE_FACES
+import xyz.xenondevs.nova.util.CubeFaceSet
 import xyz.xenondevs.nova.util.add
 import xyz.xenondevs.nova.util.runTask
-import xyz.xenondevs.nova.world.BlockPos
+import xyz.xenondevs.nova.world.block.NovaBlockState
 import xyz.xenondevs.nova.world.block.hitbox.Hitbox
-import xyz.xenondevs.nova.world.block.state.NovaBlockState
 import xyz.xenondevs.nova.world.block.tileentity.TileEntity
 import xyz.xenondevs.nova.world.block.tileentity.network.NetworkManager
 import xyz.xenondevs.nova.world.block.tileentity.network.node.NetworkBridge
@@ -24,7 +24,8 @@ import xyz.xenondevs.nova.world.block.tileentity.network.node.NetworkNode
 import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkType
 import xyz.xenondevs.nova.world.format.NetworkState
 
-private val SUPPORTED_NETWORK_TYPES: Set<NetworkType<*>> = hashSetOf(NetworkTypes.STORAGE)
+// lazy: a registry entry can only be resolved once the registries are frozen
+private val SUPPORTED_NETWORK_TYPES: Set<NetworkType<*>> by lazy { setOf(NetworkTypes.STORAGE.get()) }
 
 /**
  * Carries a storage network between devices that are not placed against each other.
@@ -33,16 +34,16 @@ private val SUPPORTED_NETWORK_TYPES: Set<NetworkType<*>> = hashSetOf(NetworkType
  * and no throughput, so there is nothing to configure and nothing to tick.
  */
 class StorageCable(
-    pos: BlockPos,
+    block: Block,
     state: NovaBlockState,
     data: Compound
-) : TileEntity(pos, state, data), NetworkBridge {
+) : TileEntity(block, state, data), NetworkBridge {
 
     @Volatile
     override var isValid = false
 
     override val linkedNodes: Set<NetworkNode> = emptySet()
-    override val typeId get() = block.id
+    override val typeId get() = blockType.key
 
     private var hitboxes: Set<Hitbox<*, *>> = emptySet()
 
@@ -60,7 +61,7 @@ class StorageCable(
 
     override fun handlePlace(ctx: Context<BlockPlace>) {
         super.handlePlace(ctx)
-        NetworkManager.queueAddBridge(this, SUPPORTED_NETWORK_TYPES, CUBE_FACES)
+        NetworkManager.queueAddBridge(this, SUPPORTED_NETWORK_TYPES, CubeFaceSet.ALL)
         isValid = true
     }
 
@@ -95,16 +96,14 @@ class StorageCable(
     }
 
     private fun calculateBlockState(connected: Set<BlockFace>): NovaBlockState =
-        block.defaultBlockState.with(
-            mapOf(
-                BlockStateProperties.NORTH to (BlockFace.NORTH in connected),
-                BlockStateProperties.EAST to (BlockFace.EAST in connected),
-                BlockStateProperties.SOUTH to (BlockFace.SOUTH in connected),
-                BlockStateProperties.WEST to (BlockFace.WEST in connected),
-                BlockStateProperties.UP to (BlockFace.UP in connected),
-                BlockStateProperties.DOWN to (BlockFace.DOWN in connected)
-            )
-        )
+        blockState.apply {
+            this[BlockStateProperties.NORTH] = BlockFace.NORTH in connected
+            this[BlockStateProperties.EAST] = BlockFace.EAST in connected
+            this[BlockStateProperties.SOUTH] = BlockFace.SOUTH in connected
+            this[BlockStateProperties.WEST] = BlockFace.WEST in connected
+            this[BlockStateProperties.UP] = BlockFace.UP in connected
+            this[BlockStateProperties.DOWN] = BlockFace.DOWN in connected
+        }
 
     /**
      * The cable's vanilla backing block has no collision, so without these it could not be mined at all.
@@ -114,14 +113,14 @@ class StorageCable(
         val hitboxes = HashSet<Hitbox<*, *>>()
 
         hitboxes += destructionHitbox(
-            pos,
-            pos.location.add(Vector3d(0.375, 0.375, 0.375)),
-            pos.location.add(Vector3d(0.625, 0.625, 0.625))
+            block,
+            block.location.add(Vector3d(0.375, 0.375, 0.375)),
+            block.location.add(Vector3d(0.625, 0.625, 0.625))
         )
 
         for (face in connected) {
-            val (from, to) = pos.boxTowards(Vector3d(0.42, 0.42, 0.5), Vector3d(0.58, 0.58, 1.0), face)
-            hitboxes += destructionHitbox(pos, from, to)
+            val (from, to) = block.boxTowards(Vector3d(0.42, 0.42, 0.5), Vector3d(0.58, 0.58, 1.0), face)
+            hitboxes += destructionHitbox(block, from, to)
         }
 
         return hitboxes

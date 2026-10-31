@@ -1,9 +1,10 @@
 package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.gui.ClickableItem
+import it.sgdc3.smartstorage.gui.MenuContent
+import it.sgdc3.smartstorage.gui.MenuTracker
 import it.sgdc3.smartstorage.gui.networkStatusIcon
 import it.sgdc3.smartstorage.gui.priorityIcon
-import it.sgdc3.smartstorage.network.DEFAULT_PRIORITY
 import it.sgdc3.smartstorage.network.NetworkView
 import it.sgdc3.smartstorage.network.PRIORITY_RANGE
 import it.sgdc3.smartstorage.network.StorageEndPoint
@@ -18,47 +19,49 @@ import it.sgdc3.smartstorage.registry.NetworkTypes
 import it.sgdc3.smartstorage.storage.ItemType
 import it.sgdc3.smartstorage.util.getItemFilter
 import it.sgdc3.smartstorage.util.isItemFilter
+import it.sgdc3.smartstorage.util.nearbyNodes
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import org.bukkit.Material
+import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
 import org.bukkit.entity.Player
 import xyz.xenondevs.cbf.Compound
 import xyz.xenondevs.commons.collections.enumMap
 import xyz.xenondevs.commons.collections.toEnumSet
+import xyz.xenondevs.invui.dsl.NormalSplitWindowDsl
+import xyz.xenondevs.invui.dsl.window
 import xyz.xenondevs.invui.gui.Gui
 import xyz.xenondevs.invui.inventory.VirtualInventory
-import xyz.xenondevs.invui.inventory.event.ItemPreUpdateEvent
 import xyz.xenondevs.invui.item.ItemBuilder
-import xyz.xenondevs.invui.window.Window
-import xyz.xenondevs.nova.addon.simpleupgrades.gui.OpenUpgradesItem
+import xyz.xenondevs.nova.addon.simpleupgrades.openUpgradesItem
 import xyz.xenondevs.nova.addon.simpleupgrades.registry.UpgradeTypes
 import xyz.xenondevs.nova.addon.simpleupgrades.storedUpgradeHolder
 import xyz.xenondevs.nova.config.entry
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
-import xyz.xenondevs.nova.ui.menu.addIngredient
+import xyz.xenondevs.nova.registry.RegistryEntry
 import xyz.xenondevs.nova.ui.menu.item.AddNumberItem
 import xyz.xenondevs.nova.ui.menu.item.RemoveNumberItem
+import xyz.xenondevs.nova.ui.overlay.guitexture.getTitle
 import xyz.xenondevs.nova.util.CUBE_FACES
+import xyz.xenondevs.nova.util.CubeFaceMap
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
 import xyz.xenondevs.nova.util.runTask
 import xyz.xenondevs.nova.util.serverTick
-import xyz.xenondevs.nova.world.BlockPos
-import xyz.xenondevs.nova.world.block.state.NovaBlockState
-import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
+import xyz.xenondevs.nova.world.block.NovaBlockState
+import xyz.xenondevs.nova.world.block.config
 import xyz.xenondevs.nova.world.block.tileentity.network.NetworkManager
 import xyz.xenondevs.nova.world.block.tileentity.network.node.NetworkEndPoint
 import xyz.xenondevs.nova.world.block.tileentity.network.type.DefaultNetworkTypes.ITEM
 import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkConnectionType
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.ItemFilter
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.holder.ItemHolder
+import xyz.xenondevs.nova.world.chunkPos
 import xyz.xenondevs.nova.world.format.NetworkState
 import xyz.xenondevs.nova.world.item.DefaultGuiItems
-import xyz.xenondevs.nova.world.item.NovaItem
-import java.util.UUID
 import kotlin.math.max
 import kotlin.math.roundToLong
+import org.bukkit.inventory.ItemType as BukkitItemType
 
 private val EXPOSED_SLOTS by STORAGE_INTERFACE.config.entry<Int>("exposed_slots")
 private val BASE_ITEM_TRANSFER by STORAGE_INTERFACE.config.entry<Double>("base_item_transfer")
@@ -113,10 +116,10 @@ private val NEIGHBOUR_RESCAN_TICKS by STORAGE_INTERFACE.config.entry<Int>("neigh
  * between two machines serves both.
  */
 class StorageInterface(
-    pos: BlockPos,
+    block: Block,
     state: NovaBlockState,
     data: Compound
-) : StorageHub(pos, state, data), StorageEndPoint {
+) : StorageHub(block, state, data), StorageEndPoint {
 
     override val portModel = Models.INTERFACE_ATTACHMENT
     override val portModelOff = Models.INTERFACE_ATTACHMENT_OFF
@@ -184,13 +187,13 @@ class StorageInterface(
     private suspend fun syncAllowedFaces(state: NetworkState) {
         for (face in CUBE_FACES) {
             if (itemHolder.connectionConfig[face] == NetworkConnectionType.NONE)
-                state.handleEndPointAllowedFacesChange(this, ITEM, face)
+                state.handleEndPointAllowedFacesChange(this, ITEM.get(), face)
         }
     }
 
     override fun handleEnable() {
         super.handleEnable()
-        NetworkManager.queueWrite(pos.chunkPos, ::syncAllowedFaces)
+        NetworkManager.queueWrite(block.chunkPos, ::syncAllowedFaces)
     }
 
     override suspend fun handleNetworkLoaded(state: NetworkState) = applyConnections(state)
@@ -205,26 +208,26 @@ class StorageInterface(
      * and the icon would go on saying the side is empty until something unrelated happened.
      *
      * Six lookups in a map, once a second. Not gated on an open menu because a port window is not one of
-     * the menus [menuContainer] counts, and the whole point is the icon inside it.
+     * the menus [menus] counts, and the whole point is the icon inside it.
      */
     override fun handleTick() {
         refillBudgets()
 
         // the lamp in the menu says what the core's own light says, so one signal redraws both
         if (setPowered(storageNetwork?.isOnline == true))
-            menuContainer.forEachMenu(StorageInterfaceMenu::update)
+            menus.forEach(StorageInterfaceMenu::update)
 
         if (serverTick % max(1, NEIGHBOUR_RESCAN_TICKS) != 0)
             return
 
-        NetworkManager.queueRead(pos.chunkPos) { state ->
+        NetworkManager.queueRead(block.chunkPos) { state ->
             val attached = neighbours(state)
             if (attached == attachedFaces)
                 return@queueRead
 
             attachedFaces = attached
             runTask {
-                menuContainer.forEachMenu(StorageInterfaceMenu::update)
+                menus.forEach(StorageInterfaceMenu::update)
                 portMenus.values.forEach(PortMenu::update)
             }
         }
@@ -249,10 +252,10 @@ class StorageInterface(
             syncAllowedFaces(state)
 
         val connected = state.getConnectedNodes(this)
-        val arms = connected.row(NetworkTypes.STORAGE).keys.toEnumSet()
+        val arms = connected.row(NetworkTypes.STORAGE.get()).keys.toEnumSet()
 
         val ports = HashSet<BlockFace>()
-        collectPorts(connected.row(ITEM), itemHolder.connectionConfig, ports)
+        collectPorts(connected.row(ITEM.get()), itemHolder.connectionConfig, ports)
         // A side that already carries an arm is a side that is talking on the storage network, and that
         // is the whole conversation: another interface pressed against this one is a neighbouring *node*,
         // the way a cable is, not a container to bolt a nozzle onto. Nova joins any two nodes that touch,
@@ -277,7 +280,7 @@ class StorageInterface(
 
             setArmFaces(arms)
             setPortFaces(ports)
-            menuContainer.forEachMenu(StorageInterfaceMenu::update)
+            menus.forEach(StorageInterfaceMenu::update)
         }
     }
 
@@ -292,7 +295,7 @@ class StorageInterface(
      * off — could never be reached.
      */
     private fun neighbours(state: NetworkState): Set<BlockFace> =
-        state.getNearbyNodes(pos, CUBE_FACES)
+        state.nearbyNodes(block)
             .filterValues { node ->
                 node is NetworkEndPoint && node.holders.any { it is ItemHolder }
             }
@@ -311,9 +314,9 @@ class StorageInterface(
         var changed = false
 
         for (face in CUBE_FACES) {
-            val items = itemHolder.connectionConfig[face] ?: continue
+            val items = itemHolder.connectionConfig[face]
             if (items.extract && itemHolder.extractFilters[face] == null) {
-                itemHolder.connectionConfig[face] = NetworkConnectionType.of(items.insert, false)
+                itemHolder.connectionConfig = itemHolder.connectionConfig.with(face, NetworkConnectionType.of(items.insert, false))
                 changed = true
             }
         }
@@ -326,14 +329,14 @@ class StorageInterface(
      */
     private fun collectPorts(
         neighbours: Map<BlockFace, *>,
-        config: Map<BlockFace, NetworkConnectionType>,
+        config: CubeFaceMap<NetworkConnectionType>,
         into: MutableSet<BlockFace>
     ) {
         for ((face, node) in neighbours) {
             if (node !is NetworkEndPoint)
                 continue
 
-            val type = config[face] ?: continue
+            val type = config[face]
             if (type.insert || type.extract)
                 into += face
         }
@@ -370,7 +373,7 @@ class StorageInterface(
         var handingOut = false
 
         for (face in CUBE_FACES) {
-            if (itemHolder.connectionConfig[face]?.extract != true)
+            if (!itemHolder.connectionConfig[face].extract)
                 continue
 
             handingOut = true
@@ -407,7 +410,7 @@ class StorageInterface(
      * so the two can never disagree.
      */
     private fun faceIcon(face: BlockFace): ItemBuilder {
-        val items = itemHolder.connectionConfig[face] ?: NetworkConnectionType.NONE
+        val items = itemHolder.connectionConfig[face]
         val open = items != NetworkConnectionType.NONE
         val attached = face in attachedFaces
 
@@ -415,9 +418,9 @@ class StorageInterface(
         // being served, something there that has been switched off, and nothing there at all
         val builder = ItemBuilder(
             when {
-                attached && open -> Material.HOPPER
-                attached -> Material.BARRIER
-                else -> Material.GRAY_STAINED_GLASS_PANE
+                attached && open -> BukkitItemType.HOPPER
+                attached -> BukkitItemType.BARRIER
+                else -> BukkitItemType.GRAY_STAINED_GLASS_PANE
             }
         )
         builder.setName(faceName(face).withoutPreFormatting())
@@ -453,7 +456,7 @@ class StorageInterface(
      * only in the sense that [setPriority] holds both equal.
      */
     private fun priorityOf(face: BlockFace): Int =
-        itemHolder.insertPriorities[face] ?: DEFAULT_PRIORITY
+        itemHolder.insertPriorities[face]
 
     /**
      * Left unstyled on purpose: it is the window title as well as an item name, and a window title is
@@ -535,8 +538,8 @@ class StorageInterface(
             .addIngredient('x', extractItem)
             // each filter sits under the switch it gates, so the placeholders carry this addon's names
             // rather than Nova's: the one below Extract gates what comes into the network
-            .addIngredient('a', insertFilterInventory, GuiItems.EXTRACT_FILTER_PLACEHOLDER)
-            .addIngredient('b', extractFilterInventory, GuiItems.INSERT_FILTER_PLACEHOLDER)
+            .addIngredient('a', insertFilterInventory, ItemBuilder(GuiItems.EXTRACT_FILTER_PLACEHOLDER.get()))
+            .addIngredient('b', extractFilterInventory, ItemBuilder(GuiItems.INSERT_FILTER_PLACEHOLDER.get()))
             .addIngredient('i', statusItem)
             .addIngredient('v', priorityItem)
             .addIngredient('m', RemoveNumberItem({ PRIORITY_RANGE }, { priorityOf(face) }, ::setPriority, "menu.smartstorage.priority_down"))
@@ -544,12 +547,12 @@ class StorageInterface(
             .build()
 
         fun open(player: Player) {
-            val window = Window.builder()
-                .setTitle(GuiTextures.INTERFACE_SIDE.getTitle(faceName(face)))
-                .setUpperGui(gui)
-                .build(player)
+            val window = window(player) {
+                title by GuiTextures.INTERFACE_SIDE.getTitle(faceName(face))
+                upperGui by gui
+            }
 
-            menuContainer.registerWindow(window)
+            this@StorageInterface.menu.register(window)
             window.open()
         }
 
@@ -566,21 +569,21 @@ class StorageInterface(
          * value could be ordered by an extract value they never touched.
          */
         private fun setPriority(value: Int) {
-            NetworkManager.queueWrite(pos.chunkPos) { state ->
-                itemHolder.insertPriorities[face] = value
-                itemHolder.extractPriorities[face] = value
+            NetworkManager.queueWrite(block.chunkPos) { state ->
+                itemHolder.insertPriorities = itemHolder.insertPriorities.with(face, value)
+                itemHolder.extractPriorities = itemHolder.extractPriorities.with(face, value)
 
-                state.getNetwork(this@StorageInterface, ITEM, face)?.markDirty()
+                state.getNetwork(this@StorageInterface, ITEM.get(), face)?.markDirty()
 
                 runTask {
                     update()
-                    menuContainer.forEachMenu(StorageInterfaceMenu::update)
+                    menus.forEach(StorageInterfaceMenu::update)
                 }
             }
         }
 
         private fun itemConfig(): NetworkConnectionType =
-            itemHolder.connectionConfig[face] ?: NetworkConnectionType.NONE
+            itemHolder.connectionConfig[face]
 
         //<editor-fold desc="writes", defaultstate="collapsed">
 
@@ -599,15 +602,18 @@ class StorageInterface(
          * simply does not take.
          */
         private fun toggle(insert: Boolean) {
-            NetworkManager.queueWrite(pos.chunkPos) { state ->
+            NetworkManager.queueWrite(block.chunkPos) { state ->
                 val current = itemConfig()
-                itemHolder.connectionConfig[face] = if (insert)
-                    NetworkConnectionType.of(!current.insert, current.extract)
-                else
-                    NetworkConnectionType.of(current.insert, !current.extract)
+                itemHolder.connectionConfig = itemHolder.connectionConfig.with(
+                    face,
+                    if (insert)
+                        NetworkConnectionType.of(!current.insert, current.extract)
+                    else
+                        NetworkConnectionType.of(current.insert, !current.extract)
+                )
 
-                state.getNetwork(this@StorageInterface, ITEM, face)?.markDirty()
-                state.handleEndPointAllowedFacesChange(this@StorageInterface, ITEM, face)
+                state.getNetwork(this@StorageInterface, ITEM.get(), face)?.markDirty()
+                state.handleEndPointAllowedFacesChange(this@StorageInterface, ITEM.get(), face)
 
                 applyConnections(state)
                 runTask(::update)
@@ -637,9 +643,11 @@ class StorageInterface(
         }
 
         private fun applyFilter(extract: Boolean, filter: ItemFilter<*>?) {
-            NetworkManager.queueWrite(pos.chunkPos) { state ->
-                val filters = if (extract) itemHolder.extractFilters else itemHolder.insertFilters
-                if (filter == null) filters.remove(face) else filters[face] = filter
+            NetworkManager.queueWrite(block.chunkPos) { state ->
+                if (extract)
+                    itemHolder.extractFilters = itemHolder.extractFilters.with(face, filter)
+                else
+                    itemHolder.insertFilters = itemHolder.insertFilters.with(face, filter)
 
                 // A filter put in is the side being told what may go, which is the one thing extraction
                 // was waiting for — so it opens here rather than waiting to be switched on a second time.
@@ -652,14 +660,14 @@ class StorageInterface(
                 if (extract && filter != null) {
                     val current = itemConfig()
                     if (!current.extract)
-                        itemHolder.connectionConfig[face] = NetworkConnectionType.of(current.insert, true)
+                        itemHolder.connectionConfig = itemHolder.connectionConfig.with(face, NetworkConnectionType.of(current.insert, true))
                 }
 
                 // taking an extract filter out closes the side, on both networks
                 enforceExtractFilters()
 
-                state.getNetwork(this@StorageInterface, ITEM, face)?.markDirty()
-                state.handleEndPointAllowedFacesChange(this@StorageInterface, ITEM, face)
+                state.getNetwork(this@StorageInterface, ITEM.get(), face)?.markDirty()
+                state.handleEndPointAllowedFacesChange(this@StorageInterface, ITEM.get(), face)
 
                 applyConnections(state)
                 runTask(::update)
@@ -678,8 +686,8 @@ class StorageInterface(
          * colour with the word beside it rather than with Nova's word for the flag underneath. The
          * caller passes both.
          */
-        private fun toggleIcon(on: Boolean, onItem: NovaItem, key: String): ItemBuilder =
-            (if (on) onItem else DefaultGuiItems.GRAY_BTN).createClientsideItemBuilder().setName(
+        private fun toggleIcon(on: Boolean, onItem: RegistryEntry.Paper<BukkitItemType>, key: String): ItemBuilder =
+            ItemBuilder((if (on) onItem else DefaultGuiItems.GRAY_BTN).get()).setName(
                 Component.translatable(
                     key,
                     if (on) NamedTextColor.GREEN else NamedTextColor.GRAY,
@@ -711,8 +719,11 @@ class StorageInterface(
      * The block's own menu is a summary of its six sides, exactly as the storage connector's is: there is
      * nothing left that belongs to the block rather than to one of its faces.
      */
-    @TileEntityMenuClass
-    inner class StorageInterfaceMenu : GlobalTileEntityMenu(GuiTextures.STORAGE_INTERFACE) {
+    private val menus = MenuTracker<StorageInterfaceMenu>()
+
+    override val menu = menus.menu(GuiTextures.STORAGE_INTERFACE) { StorageInterfaceMenu(this) }
+
+    inner class StorageInterfaceMenu(private val host: NormalSplitWindowDsl) : MenuContent {
 
         private val statusItem = ClickableItem({ statusIcon() })
 
@@ -728,7 +739,7 @@ class StorageInterface(
                 "n i . 1 2 3 4 5 6",
                 ". . . . . . . . ."
             )
-            .addIngredient('u', OpenUpgradesItem(upgradeHolder))
+            .addIngredient('u', with(host) { openUpgradesItem(upgradeHolder) })
             .addIngredient('i', statusItem)
             .addIngredient('n', networkItem)
             .addIngredient('1', faceItems[0])
@@ -748,7 +759,7 @@ class StorageInterface(
         private fun statusIcon(): ItemBuilder {
             val served = servedFaces.size
 
-            val builder = ItemBuilder(Material.HOPPER)
+            val builder = ItemBuilder(BukkitItemType.HOPPER)
             builder.setName(Component.translatable("menu.smartstorage.interface.title").withoutPreFormatting())
             builder.setLore(
                 listOf(

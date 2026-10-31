@@ -11,40 +11,44 @@ import it.sgdc3.smartstorage.tileentity.StorageController
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
-import org.bukkit.Material
 import org.bukkit.block.Block
 import org.bukkit.entity.Player
 import org.bukkit.inventory.EquipmentSlot
 import org.bukkit.inventory.ItemStack
+import org.bukkit.inventory.ItemType
 import org.bukkit.scheduler.BukkitTask
 import xyz.xenondevs.cbf.Compound
 import xyz.xenondevs.invui.dsl.anvilWindow
 import xyz.xenondevs.invui.dsl.item
+import xyz.xenondevs.invui.dsl.window
 import xyz.xenondevs.invui.gui.Gui
 import xyz.xenondevs.invui.inventory.VirtualInventory
 import xyz.xenondevs.invui.inventory.event.UpdateReason
 import xyz.xenondevs.invui.item.Item
 import xyz.xenondevs.invui.item.ItemBuilder
-import xyz.xenondevs.invui.window.Window
 import xyz.xenondevs.nova.addon.simpleupgrades.registry.UpgradeTypes
+import xyz.xenondevs.nova.config.ConfigProvider
 import xyz.xenondevs.nova.config.entry
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockInteract
 import xyz.xenondevs.nova.context.intention.ItemUse
+import xyz.xenondevs.nova.registry.RegistryEntry
 import xyz.xenondevs.nova.ui.overlay.guitexture.DefaultGuiTextures
 import xyz.xenondevs.nova.ui.overlay.guitexture.GuiTexture
+import xyz.xenondevs.nova.ui.overlay.guitexture.getTitle
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
-import xyz.xenondevs.nova.util.item.novaItem
 import xyz.xenondevs.nova.util.item.retrieveData
 import xyz.xenondevs.nova.util.item.storeData
 import xyz.xenondevs.nova.util.playClickSound
 import xyz.xenondevs.nova.util.runTaskTimer
-import xyz.xenondevs.nova.world.BlockPos
 import xyz.xenondevs.nova.world.InteractionResult
-import xyz.xenondevs.nova.world.format.WorldDataManager
-import xyz.xenondevs.nova.world.item.NovaItem
+import xyz.xenondevs.nova.world.block.novaTileEntity
 import xyz.xenondevs.nova.world.item.behavior.ItemBehavior
 import xyz.xenondevs.nova.world.item.behavior.ItemBehaviorFactory
+import xyz.xenondevs.nova.world.item.createItemStack
+import xyz.xenondevs.nova.world.item.getBehaviorOrNull
+import xyz.xenondevs.nova.world.item.itemType
+import xyz.xenondevs.nova.world.item.itemTypeEntry
 import java.util.UUID
 import kotlin.math.max
 
@@ -73,12 +77,12 @@ import kotlin.math.max
  * of range does not open — so an upgrade slot living inside it could never be reached by the one player
  * who needs it, which is the player standing too far away.
  */
-class WirelessTerminalBehavior(item: NovaItem) : ItemBehavior {
+class WirelessTerminalBehavior(config: ConfigProvider) : ItemBehavior {
 
-    private val baseRange: Double by item.config.entry<Double>("base_range")
-    private val rangePerUpgrade: Double by item.config.entry<Double>("range_per_upgrade")
-    private val maxUpgrades: Int by item.config.entry<Int>("max_range_upgrades")
-    private val maxBulkCrafts: Int by item.config.entry<Int>("max_bulk_crafts")
+    private val baseRange: Double by config.entry<Double>("base_range")
+    private val rangePerUpgrade: Double by config.entry<Double>("range_per_upgrade")
+    private val maxUpgrades: Int by config.entry<Int>("max_range_upgrades")
+    private val maxBulkCrafts: Int by config.entry<Int>("max_bulk_crafts")
 
     /**
      * Right-click in the air.
@@ -119,7 +123,7 @@ class WirelessTerminalBehavior(item: NovaItem) : ItemBehavior {
      * one of these, which is the only place a binding is ever made.
      */
     fun bind(itemStack: ItemStack, controller: StorageController) {
-        val pos = controller.pos
+        val pos = controller.block
 
         val compound = Compound()
         compound["world"] = pos.world.uid.toString()
@@ -130,7 +134,7 @@ class WirelessTerminalBehavior(item: NovaItem) : ItemBehavior {
         itemStack.storeData(SmartStorage, BINDING_KEY, compound)
     }
 
-    private fun binding(itemStack: ItemStack): BlockPos? {
+    private fun binding(itemStack: ItemStack): Block? {
         val compound = itemStack.retrieveData<Compound>(SmartStorage, BINDING_KEY) ?: return null
 
         val worldId: String = compound["world"] ?: return null
@@ -139,7 +143,7 @@ class WirelessTerminalBehavior(item: NovaItem) : ItemBehavior {
         val y: Int = compound["y"] ?: return null
         val z: Int = compound["z"] ?: return null
 
-        return BlockPos(world, x, y, z)
+        return world.getBlockAt(x, y, z)
     }
 
     //</editor-fold>
@@ -179,7 +183,7 @@ class WirelessTerminalBehavior(item: NovaItem) : ItemBehavior {
         if (!pos.world.isChunkLoaded(pos.x shr 4, pos.z shr 4))
             return fail(player, "menu.smartstorage.wireless.out_of_reach")
 
-        val controller = WorldDataManager.getTileEntity(pos) as? StorageController
+        val controller = pos.novaTileEntity as? StorageController
             ?: return fail(player, "menu.smartstorage.wireless.no_controller")
 
         val network = controller.storageNetwork?.takeIf { it.isOnline }
@@ -187,7 +191,7 @@ class WirelessTerminalBehavior(item: NovaItem) : ItemBehavior {
 
         val reach = range(itemStack)
         val inReach = network.wirelessNodes().any { node ->
-            val nodePos = node.pos
+            val nodePos = node.block
             if (nodePos.world != player.world)
                 return@any false
 
@@ -319,7 +323,7 @@ class WirelessTerminalBehavior(item: NovaItem) : ItemBehavior {
             val items = content.contentProvider(player, filter, sortMode, columns = 8, visibleSlots = 24)
 
             val window = anvilWindow(player) {
-                title by DefaultGuiTextures.SEARCH.component
+                title by DefaultGuiTextures.SEARCH.getTitle()
                 // 9x4 because InvUI requires it, three rows of results because that is what the
                 // background frames — see the storage terminal
                 lowerGui by content.contentGui(
@@ -351,16 +355,15 @@ class WirelessTerminalBehavior(item: NovaItem) : ItemBehavior {
             }
         }
 
-        private fun show(texture: GuiTexture, gui: Gui) {
-            val window = Window.builder()
-                .setViewer(player)
-                .setTitle(texture.getTitle(Component.translatable("menu.smartstorage.wireless.title")))
-                .setUpperGui(gui)
-                .addCloseHandler {
+        private fun show(texture: RegistryEntry.Nova<GuiTexture>, gui: Gui) {
+            val window = window(player) {
+                title by texture.getTitle(Component.translatable("menu.smartstorage.wireless.title"))
+                upperGui by gui
+                onClose {
                     if (!switching)
                         end()
                 }
-                .build()
+            }
 
             content.refresh()
 
@@ -400,7 +403,7 @@ class WirelessTerminalBehavior(item: NovaItem) : ItemBehavior {
         //</editor-fold>
 
         private fun modeButton(crafting: Boolean): Item = item {
-            itemProvider by ItemBuilder(if (crafting) Material.CRAFTING_TABLE else Material.CHEST).setName(
+            itemProvider by ItemBuilder(if (crafting) ItemType.CRAFTING_TABLE else ItemType.CHEST).setName(
                 Component.translatable(
                     if (crafting) "menu.smartstorage.wireless.to_crafting" else "menu.smartstorage.wireless.to_list",
                     NamedTextColor.GRAY
@@ -432,7 +435,7 @@ class WirelessTerminalBehavior(item: NovaItem) : ItemBehavior {
 
         val installed = upgrades(held)
         if (installed > 0)
-            inventory.setItem(SELF, 0, UpgradeTypes.RANGE.item.createItemStack(installed))
+            inventory.setItem(SELF, 0, UpgradeTypes.RANGE.get().item.createItemStack(installed))
 
         /**
          * The terminal this window is editing, as it was after the last write.
@@ -454,7 +457,7 @@ class WirelessTerminalBehavior(item: NovaItem) : ItemBehavior {
                 return@addPreUpdateHandler
 
             val newItem = event.newItem
-            if (newItem != null && newItem.novaItem != UpgradeTypes.RANGE.item) {
+            if (newItem != null && newItem.itemTypeEntry != UpgradeTypes.RANGE.get().item) {
                 event.isCancelled = true
                 return@addPreUpdateHandler
             }
@@ -471,27 +474,23 @@ class WirelessTerminalBehavior(item: NovaItem) : ItemBehavior {
             expected = terminal.clone()
         }
 
-        Window.builder()
-            .setViewer(player)
-            .setTitle(GuiTextures.WIRELESS_UPGRADES.getTitle(Component.translatable("menu.smartstorage.wireless.upgrades")))
-            .setUpperGui(
-                Gui.builder()
-                    .setStructure(
-                        ". . . . . . . . .",
-                        ". . . . u . . . .",
-                        ". . . . . . . . ."
-                    )
-                    .addIngredient('u', inventory)
-                    .build()
-            )
-            .build()
-            .open()
+        window(player) {
+            title by GuiTextures.WIRELESS_UPGRADES.getTitle(Component.translatable("menu.smartstorage.wireless.upgrades"))
+            upperGui by Gui.builder()
+                .setStructure(
+                    ". . . . . . . . .",
+                    ". . . . u . . . .",
+                    ". . . . . . . . ."
+                )
+                .addIngredient('u', inventory)
+                .build()
+        }.open()
 
         player.playClickSound()
     }
 
     private fun searchButton(open: () -> Unit): Item = item {
-        itemProvider by ItemBuilder(Material.COMPASS).setName(
+        itemProvider by ItemBuilder(ItemType.COMPASS).setName(
             Component.translatable("menu.smartstorage.terminal.search", NamedTextColor.GRAY).withoutPreFormatting()
         )
         onClick {
@@ -503,7 +502,7 @@ class WirelessTerminalBehavior(item: NovaItem) : ItemBehavior {
     }
 
     private fun backButton(back: () -> Unit): Item = item {
-        itemProvider by ItemBuilder(Material.BARRIER).setName(
+        itemProvider by ItemBuilder(ItemType.BARRIER).setName(
             Component.translatable("menu.smartstorage.terminal.back", NamedTextColor.GRAY).withoutPreFormatting()
         )
         onClick {
@@ -556,13 +555,13 @@ class WirelessTerminalBehavior(item: NovaItem) : ItemBehavior {
          */
         private val SELF = object : UpdateReason {}
 
-        override fun create(item: NovaItem) = WirelessTerminalBehavior(item)
+        override fun create(entry: RegistryEntry.Paper<ItemType>, config: ConfigProvider) = WirelessTerminalBehavior(config)
 
         /**
          * The wireless terminal behavior of [itemStack], or null if it isn't one.
          */
         fun of(itemStack: ItemStack?): WirelessTerminalBehavior? =
-            itemStack?.novaItem?.getBehaviorOrNull<WirelessTerminalBehavior>()
+            itemStack?.itemType?.getBehaviorOrNull<WirelessTerminalBehavior>()
 
     }
 

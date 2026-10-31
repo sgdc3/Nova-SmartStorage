@@ -2,25 +2,30 @@ package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.registry.Blocks.ENERGY_VALVE
 import it.sgdc3.smartstorage.registry.Models
+import it.sgdc3.smartstorage.util.nearbyNodes
 import org.bukkit.Bukkit
-import xyz.xenondevs.cbf.Compound
+import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
+import org.bukkit.inventory.ItemType
 import org.joml.Math
 import org.joml.Quaternionf
-import org.bukkit.entity.Player
+import xyz.xenondevs.cbf.Compound
 import xyz.xenondevs.commons.collections.toEnumSet
 import xyz.xenondevs.nova.addon.simpleupgrades.registry.UpgradeTypes
 import xyz.xenondevs.nova.addon.simpleupgrades.storedEnergyHolder
 import xyz.xenondevs.nova.addon.simpleupgrades.storedUpgradeHolder
 import xyz.xenondevs.nova.config.entry
+import xyz.xenondevs.nova.registry.RegistryEntry
 import xyz.xenondevs.nova.util.CUBE_FACES
+import xyz.xenondevs.nova.util.CubeFaceSet
 import xyz.xenondevs.nova.util.add
 import xyz.xenondevs.nova.util.pitch
-import xyz.xenondevs.nova.util.yaw
 import xyz.xenondevs.nova.util.runTask
 import xyz.xenondevs.nova.util.serverTick
-import xyz.xenondevs.nova.world.BlockPos
-import xyz.xenondevs.nova.world.block.state.NovaBlockState
+import xyz.xenondevs.nova.util.yaw
+import xyz.xenondevs.nova.world.block.NovaBlockState
+import xyz.xenondevs.nova.world.block.config
+import xyz.xenondevs.nova.world.block.novaTileEntity
 import xyz.xenondevs.nova.world.block.tileentity.TileEntity
 import xyz.xenondevs.nova.world.block.tileentity.network.NetworkManager
 import xyz.xenondevs.nova.world.block.tileentity.network.node.NetworkEndPoint
@@ -29,11 +34,10 @@ import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkConnectionT
 import xyz.xenondevs.nova.world.block.tileentity.network.type.energy.holder.EnergyHolder
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.holder.ItemHolder
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.inventory.NetworkedInventory
+import xyz.xenondevs.nova.world.chunkPos
 import xyz.xenondevs.nova.world.format.NetworkState
-import xyz.xenondevs.nova.world.format.WorldDataManager
 import xyz.xenondevs.nova.world.model.FixedMultiModel
 import xyz.xenondevs.nova.world.model.Model
-import xyz.xenondevs.nova.world.item.NovaItem
 import kotlin.math.max
 import kotlin.math.min
 
@@ -135,10 +139,10 @@ private val LOGISTICS by lazy { Bukkit.getPluginManager().getPlugin("Logistics")
  * blocked only when *all* of them are full, since one free slot is still somewhere to put work.
  */
 class EnergyValve(
-    pos: BlockPos,
+    block: Block,
     state: NovaBlockState,
     data: Compound
-) : StorageHub(pos, state, data) {
+) : StorageHub(block, state, data) {
 
     private val upgradeHolder = storedUpgradeHolder(UpgradeTypes.ENERGY)
 
@@ -187,8 +191,8 @@ class EnergyValve(
      */
     private val held = CUBE_FACES.associateWith { face -> storedValue("held_${face.name}") { 0L } }
 
-    override val portModel: NovaItem = Models.VALVE_PORT
-    override val portModelOff: NovaItem = Models.VALVE_PORT_OFF
+    override val portModel: RegistryEntry.Paper<ItemType> = Models.VALVE_PORT
+    override val portModelOff: RegistryEntry.Paper<ItemType> = Models.VALVE_PORT_OFF
 
     /**
      * A nozzle per machine, lit while that machine is being fed and dark while it is being held closed.
@@ -197,7 +201,7 @@ class EnergyValve(
      * has three answers, and one light for all of them could only say that *something* had stopped. The
      * core then follows the nozzles — see [handleTick].
      */
-    override fun portModelFor(face: BlockFace): NovaItem =
+    override fun portModelFor(face: BlockFace): RegistryEntry.Paper<ItemType> =
         if (face in shut) Models.VALVE_PORT_OFF else Models.VALVE_PORT
 
     override fun handleDisable() {
@@ -225,7 +229,7 @@ class EnergyValve(
      */
     override fun handleTick() {
         if (serverTick % max(1, WATCH_TICKS) == 0)
-            NetworkManager.queueWrite(pos.chunkPos, ::sync)
+            NetworkManager.queueWrite(block.chunkPos, ::sync)
 
         val blocked = outputs
             .filterValues { buffers -> buffers.isNotEmpty() && buffers.all(NetworkedInventory::isFull) }
@@ -256,7 +260,7 @@ class EnergyValve(
         setPowered(outputs.keys.any { it !in blocked })
         // the set of sides has not changed, only which of them is being served, so nothing else redraws
         refreshPortModels()
-        NetworkManager.queueWrite(pos.chunkPos) { state -> applyFaces(state, blocked) }
+        NetworkManager.queueWrite(block.chunkPos) { state -> applyFaces(state, blocked) }
     }
 
     /**
@@ -274,7 +278,7 @@ class EnergyValve(
 
         // A shut side keeps its arm and its nozzle. The cable and the machine are both still there, and
         // taking either away would say they had gone rather than that this one side is being held closed.
-        val arms = state.getConnectedNodes(this).row(ENERGY).keys.toEnumSet() + blocked
+        val arms = state.getConnectedNodes(this).row(ENERGY.get()).keys.toEnumSet() + blocked
 
         // A face with a machine on it shows a nozzle, and a nozzle swallows the arm behind it whole —
         // same axis, and the flange is wider than the arm is. Drawing both would be two entities to see
@@ -356,7 +360,7 @@ class EnergyValve(
      * from a network snapshot — the charge has to be moved in step with its owner's tick.
      */
     private fun neighbourEnergy(face: BlockFace): EnergyHolder? {
-        val node = WorldDataManager.getTileEntity(pos.advance(face)) as? NetworkEndPoint ?: return null
+        val node = block.getRelative(face).novaTileEntity as? NetworkEndPoint ?: return null
         return node.holders.filterIsInstance<EnergyHolder>().firstOrNull()
     }
 
@@ -374,8 +378,8 @@ class EnergyValve(
         if (!LOGISTICS)
             return PLAIN_ARM
 
-        val node = state.getNearbyNodes(pos, setOf(face))[face] as? TileEntity ?: return BASE_ARM
-        val id = node.block.id
+        val node = state.getNearbyNodes(block, CubeFaceSet.NONE + face)[face] as? TileEntity ?: return BASE_ARM
+        val id = node.blockType.key
         if (id.namespace() != "logistics")
             return BASE_ARM
 
@@ -393,8 +397,8 @@ class EnergyValve(
                 val item = Models.VALVE_ARMS[tier] ?: return@mapNotNullTo null
 
                 Model(
-                    item.createClientsideItemBuilder().get(),
-                    pos.location.add(0.5, 0.5, 0.5),
+                    item.get(),
+                    block.location.add(0.5, 0.5, 0.5),
                     // authored pointing south, like the ports, and turned the same way
                     leftRotation = Quaternionf()
                         .rotateY(Math.toRadians(180.0 - face.yaw).toFloat())
@@ -418,7 +422,7 @@ class EnergyValve(
     private fun machineOutputs(state: NetworkState): Map<BlockFace, List<NetworkedInventory>> {
         val machines = HashMap<BlockFace, List<NetworkedInventory>>()
 
-        for ((face, node) in state.getNearbyNodes(pos, CUBE_FACES)) {
+        for ((face, node) in state.nearbyNodes(block)) {
             if (node !is NetworkEndPoint)
                 continue
 
@@ -458,9 +462,9 @@ class EnergyValve(
             if (energyHolder.connectionConfig[face] == wanted)
                 continue
 
-            energyHolder.connectionConfig[face] = wanted
-            state.getNetwork(this, ENERGY, face)?.markDirty()
-            state.handleEndPointAllowedFacesChange(this, ENERGY, face)
+            energyHolder.connectionConfig = energyHolder.connectionConfig.with(face, wanted)
+            state.getNetwork(this, ENERGY.get(), face)?.markDirty()
+            state.handleEndPointAllowedFacesChange(this, ENERGY.get(), face)
         }
     }
 

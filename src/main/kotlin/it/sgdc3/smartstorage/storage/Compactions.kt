@@ -139,6 +139,7 @@ internal object Compactions {
     private val ladders = HashMap<ItemType, Compaction>()
 
     @InitFun
+    @Suppress("NOVA_MATERIAL_USAGE") // the log line names materials; Nova's item types need the game loaded
     private fun build() {
         // Every "N of one thing make one of another", and every "one of a thing makes N back". They
         // have to be gathered separately and then matched, which is the whole of the reversibility
@@ -259,6 +260,8 @@ internal object Compactions {
      * ingredient shape this does not recognise is one whose contents cannot be read, which is not the
      * same as one that is empty.
      */
+    // MaterialChoice is Bukkit's own recipe API and speaks nothing but Material
+    @Suppress("NOVA_MATERIAL_USAGE")
     private fun RecipeChoice.sole(): ItemStack? = when (this) {
         is RecipeChoice.MaterialChoice -> choices.singleOrNull()?.let(ItemStack::of)
         is RecipeChoice.ExactChoice -> choices.singleOrNull()

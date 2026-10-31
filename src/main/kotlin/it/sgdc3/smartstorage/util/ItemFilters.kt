@@ -1,9 +1,11 @@
 package it.sgdc3.smartstorage.util
 
 import org.bukkit.inventory.ItemStack
-import xyz.xenondevs.nova.util.item.novaItem
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.ItemFilter
 import xyz.xenondevs.nova.world.item.behavior.ItemFilterContainer
+import xyz.xenondevs.nova.world.item.getBehaviorOrNull
+import xyz.xenondevs.nova.world.item.hasBehavior
+import xyz.xenondevs.nova.world.item.itemType
 
 /**
  * Whether this stack is a configured item filter of any kind.
@@ -12,7 +14,7 @@ import xyz.xenondevs.nova.world.item.behavior.ItemFilterContainer
  * Logistics' included — work in our filter slots without this addon depending on any of them.
  */
 fun ItemStack?.isItemFilter(): Boolean =
-    this?.novaItem?.hasBehavior<ItemFilterContainer<*>>() == true
+    this?.itemType?.hasBehavior<ItemFilterContainer<*>>() == true
 
 /**
  * Reads the [ItemFilter] configured in this stack, or null if it isn't a filter item.
@@ -22,7 +24,7 @@ fun ItemStack?.isItemFilter(): Boolean =
  * gymnastics for no benefit.
  */
 fun ItemStack?.getItemFilter(): ItemFilter<*>? {
-    val container = this?.novaItem?.getBehaviorOrNull<ItemFilterContainer<*>>()
+    val container = this?.itemType?.getBehaviorOrNull<ItemFilterContainer<*>>()
         ?: return null
 
     return container.getFilter(this)

@@ -34,8 +34,7 @@ internal fun networkStatusIcon(network: StorageNetwork?): ItemBuilder {
         if (reason == null) NamedTextColor.GREEN else NamedTextColor.RED
     )
 
-    return (if (reason == null) GuiItems.STATUS_ONLINE else GuiItems.STATUS_OFFLINE)
-        .createClientsideItemBuilder()
+    return ItemBuilder((if (reason == null) GuiItems.STATUS_ONLINE else GuiItems.STATUS_OFFLINE).get())
         .setName(
             Component.translatable("menu.smartstorage.status.network", NamedTextColor.GRAY, state)
                 .withoutPreFormatting()

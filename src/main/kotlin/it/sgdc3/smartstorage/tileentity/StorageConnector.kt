@@ -1,25 +1,28 @@
 package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.gui.ClickableItem
+import it.sgdc3.smartstorage.gui.MenuContent
+import it.sgdc3.smartstorage.gui.MenuTracker
 import it.sgdc3.smartstorage.gui.networkStatusIcon
 import it.sgdc3.smartstorage.gui.priorityIcon
-import it.sgdc3.smartstorage.registry.GuiItems
-import it.sgdc3.smartstorage.registry.GuiTextures
-import it.sgdc3.smartstorage.registry.Models
-import it.sgdc3.smartstorage.registry.NetworkTypes
-import it.sgdc3.smartstorage.registry.TERMINAL_REFRESH_TICKS
 import it.sgdc3.smartstorage.network.DEFAULT_PRIORITY
 import it.sgdc3.smartstorage.network.PRIORITY_RANGE
 import it.sgdc3.smartstorage.network.StorageEndPoint
 import it.sgdc3.smartstorage.network.StorageHolder
 import it.sgdc3.smartstorage.network.StorageNetwork
 import it.sgdc3.smartstorage.network.StorageProvider
+import it.sgdc3.smartstorage.registry.GuiItems
+import it.sgdc3.smartstorage.registry.GuiTextures
+import it.sgdc3.smartstorage.registry.Models
+import it.sgdc3.smartstorage.registry.NetworkTypes
+import it.sgdc3.smartstorage.registry.TERMINAL_REFRESH_TICKS
 import it.sgdc3.smartstorage.storage.ItemType
 import it.sgdc3.smartstorage.util.getItemFilter
 import it.sgdc3.smartstorage.util.isItemFilter
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Material
+import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
 import org.bukkit.block.Container
 import org.bukkit.entity.Player
@@ -27,36 +30,36 @@ import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
 import xyz.xenondevs.cbf.Compound
 import xyz.xenondevs.commons.collections.enumMap
+import xyz.xenondevs.invui.dsl.NormalSplitWindowDsl
+import xyz.xenondevs.invui.dsl.window
 import xyz.xenondevs.invui.gui.Gui
 import xyz.xenondevs.invui.inventory.VirtualInventory
 import xyz.xenondevs.invui.inventory.event.ItemPreUpdateEvent
 import xyz.xenondevs.invui.item.ItemBuilder
-import xyz.xenondevs.invui.window.Window
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
-import xyz.xenondevs.nova.ui.menu.addIngredient
+import xyz.xenondevs.nova.registry.RegistryEntry
 import xyz.xenondevs.nova.ui.menu.item.AddNumberItem
 import xyz.xenondevs.nova.ui.menu.item.RemoveNumberItem
+import xyz.xenondevs.nova.ui.overlay.guitexture.getTitle
 import xyz.xenondevs.nova.util.CUBE_FACES
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
 import xyz.xenondevs.nova.util.runTask
 import xyz.xenondevs.nova.util.serverTick
-import xyz.xenondevs.nova.world.BlockPos
-import xyz.xenondevs.nova.world.block.state.NovaBlockState
+import xyz.xenondevs.nova.world.block.NovaBlockState
+import xyz.xenondevs.nova.world.block.novaTileEntity
 import xyz.xenondevs.nova.world.block.tileentity.TileEntity
-import xyz.xenondevs.nova.world.block.tileentity.menu.TileEntityMenuClass
 import xyz.xenondevs.nova.world.block.tileentity.network.node.NetworkEndPoint
 import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkConnectionType
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.ItemFilter
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.holder.ItemHolder
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.inventory.NetworkedInventory
 import xyz.xenondevs.nova.world.format.NetworkState
-import xyz.xenondevs.nova.world.format.WorldDataManager
 import xyz.xenondevs.nova.world.item.DefaultGuiItems
-import xyz.xenondevs.nova.world.item.NovaItem
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
 import kotlin.math.min
+import org.bukkit.inventory.ItemType as BukkitItemType
 
 /**
  * Which materials [StorageConnector.resolveBacking] has already found out about: true for the ones whose
@@ -66,6 +69,7 @@ import kotlin.math.min
  * concurrent map rather than a plain one not because resolution runs off the main thread — it does not,
  * it needs Bukkit — but because a cache is a poor place to depend on that staying true.
  */
+@Suppress("NOVA_MATERIAL_USAGE") // see resolveBacking: the material is the one lookup here that does not allocate
 private val CONTAINER_MATERIALS = ConcurrentHashMap<Material, Boolean>()
 
 /**
@@ -114,10 +118,10 @@ private val CONTAINER_MATERIALS = ConcurrentHashMap<Material, Boolean>()
  * and the guess is wrong for anyone whose barrels are the point.
  */
 class StorageConnector(
-    pos: BlockPos,
+    block: Block,
     state: NovaBlockState,
     data: Compound
-) : StorageHub(pos, state, data), StorageEndPoint {
+) : StorageHub(block, state, data), StorageEndPoint {
 
     override val portModel = Models.CONNECTOR_ATTACHMENT
     override val portModelOff = Models.CONNECTOR_ATTACHMENT_OFF
@@ -160,14 +164,14 @@ class StorageConnector(
         refreshContainers()
         // the lamp in the menu says what the core's own light says, so one signal redraws both
         if (setPowered(storageNetwork?.isOnline == true))
-            menuContainer.forEachMenu(StorageConnectorMenu::update)
+            menus.forEach(StorageConnectorMenu::update)
 
         // Each side's icon prints how full the container on it is, and that changes without the set of
         // ports changing — which is all refreshContainers notices. Gated on somebody looking and on the
         // same interval as every other readout, because rebuilding seven icons per viewer per tick for
         // a number nobody is reading is exactly the work the guard in refreshContainers exists to avoid.
-        if (serverTick % max(1, TERMINAL_REFRESH_TICKS) == 0 && menuContainer.getMenus<StorageConnectorMenu>().any())
-            menuContainer.forEachMenu(StorageConnectorMenu::update)
+        if (serverTick % max(1, TERMINAL_REFRESH_TICKS) == 0 && menus.isViewed)
+            menus.forEach(StorageConnectorMenu::update)
     }
 
     override fun handleDisable() {
@@ -201,7 +205,7 @@ class StorageConnector(
         storageProviders = active.map(ports::getValue).filter { it.backing != null }
 
         if (setPortFaces(active))
-            menuContainer.forEachMenu(StorageConnectorMenu::update)
+            menus.forEach(StorageConnectorMenu::update)
     }
 
     /**
@@ -211,17 +215,17 @@ class StorageConnector(
      * — are the same question for both, and this runs six times per connector per tick.
      */
     private fun resolvePort(face: BlockFace, port: ContainerPort) {
-        val neighbour = pos.advance(face)
+        val neighbour = block.getRelative(face)
 
         // Nova's own lookup throws for a chunk it has not loaded, and a connector on a chunk border has
         // neighbours in the next one. Asking Bukkit whether the chunk is loaded neither loads it nor
         // builds anything — unlike reading a block, which loads the chunk to answer.
-        if (!pos.world.isChunkLoaded(neighbour.x shr 4, neighbour.z shr 4)) {
+        if (!block.world.isChunkLoaded(neighbour.x shr 4, neighbour.z shr 4)) {
             port.backing = null
             return
         }
 
-        port.backing = resolveBacking(neighbour, WorldDataManager.getTileEntity(neighbour))
+        port.backing = resolveBacking(neighbour, neighbour.novaTileEntity)
     }
 
     /**
@@ -235,7 +239,8 @@ class StorageConnector(
      * machine's input is `INSERT` and its output `EXTRACT`, and pulling a furnace's fuel back out from
      * under it is not what anyone means by attaching storage.
      */
-    private fun resolveBacking(neighbour: BlockPos, tileEntity: TileEntity?): Backing? {
+    @Suppress("NOVA_MATERIAL_USAGE") // the material first, because it is the read that does not allocate
+    private fun resolveBacking(neighbour: Block, tileEntity: TileEntity?): Backing? {
         // Nova first, deliberately. A Nova end point is a lookup in Nova's own chunk data and touches no
         // Bukkit API at all; going through the block state to discover it would build a CraftBlockState
         // for a question Nova can answer directly. Nothing is backed by a container block, so a Nova
@@ -270,8 +275,7 @@ class StorageConnector(
 
         // Only a vanilla container needs the block state. Most sides of most connectors are air, and
         // reading the material first is a palette lookup where getState allocates.
-        val block = neighbour.block
-        val material = block.type
+        val material = neighbour.type
         if (material.isAir)
             return null
 
@@ -285,7 +289,7 @@ class StorageConnector(
             return null
 
         // getState(false) skips the snapshot copy and hands back the live block state
-        val container = block.getState(false) as? Container
+        val container = neighbour.getState(false) as? Container
         if (known == null)
             CONTAINER_MATERIALS[material] = container != null
 
@@ -301,7 +305,7 @@ class StorageConnector(
     override suspend fun handleNetworkUpdate(state: NetworkState) = applyArms(state)
 
     private suspend fun applyArms(state: NetworkState) {
-        val connected = state.getConnectedNodes(this).row(NetworkTypes.STORAGE).keys.toSet()
+        val connected = state.getConnectedNodes(this).row(NetworkTypes.STORAGE.get()).keys.toSet()
 
         // no storage connection left means no network rebuilt us, and nothing else would ever clear the
         // reference — see StorageNetworkGroup.lastTick, which catches this even when we are not notified
@@ -430,7 +434,7 @@ class StorageConnector(
             get() {
                 var total = 0L
                 for (stack in inventory.contents)
-                    total += (stack?.takeUnless { it.isEmpty }?.maxStackSize ?: Material.STONE.maxStackSize).toLong()
+                    total += (stack?.takeUnless { it.isEmpty }?.maxStackSize ?: BukkitItemType.STONE.maxStackSize).toLong()
                 return total
             }
 
@@ -825,7 +829,7 @@ class StorageConnector(
                     ". f . n x . m v p",
                     ". i . . . . . . ."
                 )
-                .addIngredient('f', filterInventory, GuiItems.STORAGE_FILTER_PLACEHOLDER)
+                .addIngredient('f', filterInventory, ItemBuilder(GuiItems.STORAGE_FILTER_PLACEHOLDER.get()))
                 .addIngredient('n', insertItem)
                 .addIngredient('x', extractItem)
                 .addIngredient('i', statusItem)
@@ -835,14 +839,14 @@ class StorageConnector(
                 .build()
 
             fun open(player: Player) {
-                val window = Window.builder()
+                val window = window(player) {
                     // without the texture's own title component the menu falls back to a plain chest,
                     // and the title goes in unstyled because a window title is drawn dark on the panel
-                    .setTitle(GuiTextures.STORAGE_CONNECTOR.getTitle(faceName()))
-                    .setUpperGui(gui)
-                    .build(player)
+                    title by GuiTextures.STORAGE_CONNECTOR.getTitle(faceName())
+                    upperGui by gui
+                }
 
-                menuContainer.registerWindow(window)
+                this@StorageConnector.menu.register(window)
                 window.open()
             }
 
@@ -868,8 +872,8 @@ class StorageConnector(
              * Nova's own side config colours, because these switches mean exactly what its do: blue for
              * what goes in, orange for what comes out, grey for a direction that is closed.
              */
-            private fun toggleIcon(on: Boolean, onItem: NovaItem, key: String): ItemBuilder =
-                (if (on) onItem else DefaultGuiItems.GRAY_BTN).createClientsideItemBuilder().setName(
+            private fun toggleIcon(on: Boolean, onItem: RegistryEntry.Paper<BukkitItemType>, key: String): ItemBuilder =
+                ItemBuilder((if (on) onItem else DefaultGuiItems.GRAY_BTN).get()).setName(
                     Component.translatable(
                         key,
                         if (on) NamedTextColor.GREEN else NamedTextColor.GRAY,
@@ -897,9 +901,9 @@ class StorageConnector(
         fun icon(): ItemBuilder {
             val builder = ItemBuilder(
                 when {
-                    isActive -> Material.CHEST
-                    backing != null -> Material.BARRIER
-                    else -> Material.GRAY_STAINED_GLASS_PANE
+                    isActive -> BukkitItemType.CHEST
+                    backing != null -> BukkitItemType.BARRIER
+                    else -> BukkitItemType.GRAY_STAINED_GLASS_PANE
                 }
             )
             builder.setName(faceName().withoutPreFormatting())
@@ -947,8 +951,11 @@ class StorageConnector(
 
     }
 
-    @TileEntityMenuClass
-    inner class StorageConnectorMenu : GlobalTileEntityMenu(GuiTextures.STORAGE_CONNECTOR) {
+    private val menus = MenuTracker<StorageConnectorMenu>()
+
+    override val menu = menus.menu(GuiTextures.STORAGE_CONNECTOR) { StorageConnectorMenu(this) }
+
+    inner class StorageConnectorMenu(private val host: NormalSplitWindowDsl) : MenuContent {
 
         private val statusItem = ClickableItem({ statusIcon() })
 
@@ -982,7 +989,7 @@ class StorageConnector(
         }
 
         private fun statusIcon(): ItemBuilder {
-            val builder = ItemBuilder(Material.CHEST)
+            val builder = ItemBuilder(BukkitItemType.CHEST)
             builder.setName(Component.translatable("menu.smartstorage.connector.title").withoutPreFormatting())
 
             val mounted = storageProviders.size

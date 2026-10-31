@@ -1,13 +1,12 @@
 package it.sgdc3.smartstorage.storage
 
 import it.sgdc3.smartstorage.ServerBacked
-import org.bukkit.Material
-import org.bukkit.inventory.ItemStack
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.bukkit.inventory.ItemType as BukkitItemType
 
 /**
  * A storage cell is bounded on two axes that do not interact — how many *kinds* of thing it holds and
@@ -17,12 +16,12 @@ import kotlin.test.assertTrue
 @ServerBacked
 class CellDataTest {
 
-    private fun type(material: Material): ItemType =
-        ItemType.of(ItemStack.of(material))!!
+    private fun type(item: BukkitItemType): ItemType =
+        ItemType.of(item.createItemStack())!!
 
-    private val cobble get() = type(Material.COBBLESTONE)
-    private val dirt get() = type(Material.DIRT)
-    private val sand get() = type(Material.SAND)
+    private val cobble get() = type(BukkitItemType.COBBLESTONE)
+    private val dirt get() = type(BukkitItemType.DIRT)
+    private val sand get() = type(BukkitItemType.SAND)
 
     private fun cell(maxTypes: Int = 8, maxItems: Long = 1000L) = CellData(maxTypes, maxItems)
 

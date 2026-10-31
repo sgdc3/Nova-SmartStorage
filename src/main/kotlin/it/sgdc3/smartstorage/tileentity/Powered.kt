@@ -21,6 +21,6 @@ internal fun TileEntity.setPowered(powered: Boolean): Boolean {
     if (blockState[BlockStateProperties.POWERED] == powered)
         return false
 
-    updateBlockState(blockState.with(BlockStateProperties.POWERED, powered))
+    updateBlockState(blockState.apply { this[BlockStateProperties.POWERED] = powered })
     return true
 }

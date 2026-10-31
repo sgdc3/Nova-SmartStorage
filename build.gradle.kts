@@ -27,39 +27,40 @@ repositories {
 dependencies {
     implementation(libs.nova)
     // From Modrinth's Maven, because xenondevs' own still has this at 1.5-alpha.2, built against Nova
-    // ~0.19, which does not link against 0.24. Modrinth serves the release jar under the project slug,
+    // ~0.19, which does not link against 0.25. Modrinth serves the release jar under the project slug,
     // with a synthesised pom that declares no dependencies — which is what we want here, since Nova
     // itself is already on the line above.
-    implementation("maven.modrinth:nova-simple-upgrades:1.11.0")
+    implementation("maven.modrinth:nova-simple-upgrades:1.12.0-alpha.2")
 
     // MockBukkit stands in for a running server, which is what an ItemStack needs before it will answer
     // anything interesting: max stack size, component-aware isSimilar, clone. The artifact id carries
     // the Paper version it was built against; the version is MockBukkit's own.
-    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v26.1.2:4.115.0")
-    // The API alone, and deliberately one minor behind what this addon compiles against.
+    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v26.3:4.119.0")
+    // The API alone, and the same Paper this addon compiles against.
     //
     // Two constraints meet here. Compilation uses Origami's *widened server*, which is the whole
     // implementation — and that cannot sit on a test classpath beside MockBukkit, because both register
-    // an InternalAPIBridge service and Paper refuses to start when it finds two. It is excluded below.
-    // And MockBukkit ships the game's own data tables, so it only agrees with the Paper it was built
-    // for: against 26.2 it dies looking up a registry entry that did not exist in 26.1.2.
+    // Paper's services and Paper refuses to start when it finds two. It is excluded below. And MockBukkit
+    // ships the game's own data tables, so it only agrees with the Paper it was built for: the artifact
+    // id above and the version here have to name the same Minecraft, and move together.
     //
-    // So the tests run against 26.1.2. What they exercise is this addon's arithmetic and routing, not
-    // Paper's item behaviour, and the handful of API they touch — stack sizes, similarity, cloning —
-    // is the same in both. See ServerBacked for the assertion that keeps that assumption honest.
-    testImplementation("io.papermc.paper:paper-api:26.1.2.build.74-stable")
-    testImplementation(platform("org.junit:junit-bom:6.1.2"))
+    // What the tests exercise is this addon's arithmetic and routing, not Paper's item behaviour. See
+    // ServerBacked for the assertion that keeps the handful of API they touch — stack sizes,
+    // similarity, cloning — honest.
+    testImplementation("io.papermc.paper:paper-api:26.3.build.235-stable")
+    testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation(kotlin("test"))
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-// Origami's patched server carries an implementation of everything Paper's API declares. On the main
+// Origami's widened server carries an implementation of everything Paper's API declares. On the main
 // classpath that is the point — the addon reaches into NMS for backing block states. On the test
-// classpath it is fatal beside MockBukkit, which is itself an implementation: Paper looks up
-// InternalAPIBridge as a service, finds two, and refuses to start.
+// classpath it is fatal beside MockBukkit, which is itself an implementation: Paper looks up its
+// services, finds two of each, and refuses to start. Since Origami 0.6 the widened server is a transform
+// of Paper's dev bundle rather than an artifact of its own, so the dev bundle is what gets left out.
 listOf(configurations.testCompileClasspath, configurations.testRuntimeClasspath).forEach { configuration ->
-    configuration.configure { exclude(group = "xyz.xenondevs.origami.patched-server") }
+    configuration.configure { exclude(group = "io.papermc.paper", module = "dev-bundle") }
 }
 
 tasks.test {

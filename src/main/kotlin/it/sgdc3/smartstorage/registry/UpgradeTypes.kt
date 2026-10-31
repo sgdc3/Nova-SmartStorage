@@ -1,8 +1,7 @@
 package it.sgdc3.smartstorage.registry
 
 import it.sgdc3.smartstorage.SmartStorage
-import xyz.xenondevs.nova.addon.simpleupgrades.UpgradeType
-import xyz.xenondevs.nova.addon.simpleupgrades.registry.UpgradeTypeRegistry
+import xyz.xenondevs.nova.addon.simpleupgrades.registry.upgradeType
 import xyz.xenondevs.nova.initialize.Init
 import xyz.xenondevs.nova.initialize.InitStage
 
@@ -13,15 +12,14 @@ import xyz.xenondevs.nova.initialize.InitStage
  * slots", so the drive bay gets its own. The values per level live under `upgrade_values.storage` in
  * each block's config.
  */
-@Init(stage = InitStage.POST_PACK_PRE_WORLD)
+@Init(stage = InitStage.PRE_PACK)
 object UpgradeTypes {
 
-    val STORAGE: UpgradeType<Int> = UpgradeTypeRegistry.registerUpgradeType(
-        SmartStorage,
-        "storage",
-        Items.STORAGE_UPGRADE,
-        GuiItems.STORAGE_UPGRADE
-    )
+    val STORAGE = SmartStorage.upgradeType<Int>("storage") {
+        item(Items.STORAGE_UPGRADE)
+        placeholder(GuiItems.STORAGE_UPGRADE)
+        defaultValue(0)
+    }
 
     /**
      * Makes a barrel take items it has no room for and burn the excess.
@@ -29,12 +27,11 @@ object UpgradeTypes {
      * A switch rather than a scale, so its value list is `[0, 1]` and installing a second one is
      * refused by Simple-Upgrades on its own — the list length is the limit.
      */
-    val VOID: UpgradeType<Int> = UpgradeTypeRegistry.registerUpgradeType(
-        SmartStorage,
-        "void",
-        Items.VOID_UPGRADE,
-        GuiItems.VOID_UPGRADE
-    )
+    val VOID = SmartStorage.upgradeType<Int>("void") {
+        item(Items.VOID_UPGRADE)
+        placeholder(GuiItems.VOID_UPGRADE)
+        defaultValue(0)
+    }
 
     /**
      * Makes a barrel hold what it is given in the densest form the server has a recipe for: ingots
@@ -42,11 +39,10 @@ object UpgradeTypes {
      *
      * A switch like [VOID], for the same reason — there is no second level of "compacted".
      */
-    val COMPACTING: UpgradeType<Int> = UpgradeTypeRegistry.registerUpgradeType(
-        SmartStorage,
-        "compacting",
-        Items.COMPACTING_UPGRADE,
-        GuiItems.COMPACTING_UPGRADE
-    )
+    val COMPACTING = SmartStorage.upgradeType<Int>("compacting") {
+        item(Items.COMPACTING_UPGRADE)
+        placeholder(GuiItems.COMPACTING_UPGRADE)
+        defaultValue(0)
+    }
 
 }

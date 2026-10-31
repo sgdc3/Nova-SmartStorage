@@ -3,9 +3,10 @@
 package it.sgdc3.smartstorage.registry
 
 import it.sgdc3.smartstorage.SmartStorage.item
+import org.bukkit.inventory.ItemType
 import xyz.xenondevs.nova.initialize.Init
 import xyz.xenondevs.nova.initialize.InitStage
-import xyz.xenondevs.nova.world.item.NovaItem
+import xyz.xenondevs.nova.registry.RegistryEntry
 
 /**
  * Items that exist only to carry a model for a display entity. They are hidden, so they never reach a
@@ -19,28 +20,28 @@ object Models {
      * not part of the block model because containers are not block state: a chest can be placed or
      * broken next to a connector without the connector's own state changing.
      */
-    val CONNECTOR_ATTACHMENT: NovaItem = port("connector", lit = true)
+    val CONNECTOR_ATTACHMENT: RegistryEntry.Paper<ItemType> = port("connector", lit = true)
 
     /**
      * The same, for a [it.sgdc3.smartstorage.tileentity.StorageInterface] against an item network
      * endpoint.
      */
-    val INTERFACE_ATTACHMENT: NovaItem = port("interface", lit = true)
+    val INTERFACE_ATTACHMENT: RegistryEntry.Paper<ItemType> = port("interface", lit = true)
 
     /**
      * The dark twins, worn while the controller is not keeping the hub running. A display entity carries
      * one model and cannot pick a texture, so an unlit port has to be a second item.
      */
-    val CONNECTOR_ATTACHMENT_OFF: NovaItem = port("connector", lit = false)
-    val INTERFACE_ATTACHMENT_OFF: NovaItem = port("interface", lit = false)
+    val CONNECTOR_ATTACHMENT_OFF: RegistryEntry.Paper<ItemType> = port("connector", lit = false)
+    val INTERFACE_ATTACHMENT_OFF: RegistryEntry.Paper<ItemType> = port("interface", lit = false)
 
     /**
      * And the same four for the fluid pair, which are separate blocks with their own artwork.
      */
-    val FLUID_CONNECTOR_ATTACHMENT: NovaItem = port("fluid_connector", lit = true)
-    val FLUID_INTERFACE_ATTACHMENT: NovaItem = port("fluid_interface", lit = true)
-    val FLUID_CONNECTOR_ATTACHMENT_OFF: NovaItem = port("fluid_connector", lit = false)
-    val FLUID_INTERFACE_ATTACHMENT_OFF: NovaItem = port("fluid_interface", lit = false)
+    val FLUID_CONNECTOR_ATTACHMENT: RegistryEntry.Paper<ItemType> = port("fluid_connector", lit = true)
+    val FLUID_INTERFACE_ATTACHMENT: RegistryEntry.Paper<ItemType> = port("fluid_interface", lit = true)
+    val FLUID_CONNECTOR_ATTACHMENT_OFF: RegistryEntry.Paper<ItemType> = port("fluid_connector", lit = false)
+    val FLUID_INTERFACE_ATTACHMENT_OFF: RegistryEntry.Paper<ItemType> = port("fluid_interface", lit = false)
 
     /**
      * The nozzle an [it.sgdc3.smartstorage.tileentity.EnergyValve] wears towards a machine.
@@ -49,8 +50,8 @@ object Models {
      * It stays on whether or not the valve is currently feeding it — what a nozzle says is that there is
      * a machine there, and whether power is going through is the core's to say.
      */
-    val VALVE_PORT: NovaItem = port("energy_valve", lit = true)
-    val VALVE_PORT_OFF: NovaItem = port("energy_valve", lit = false)
+    val VALVE_PORT: RegistryEntry.Paper<ItemType> = port("energy_valve", lit = true)
+    val VALVE_PORT_OFF: RegistryEntry.Paper<ItemType> = port("energy_valve", lit = false)
 
     /**
      * The valve's arms, one per pipe tier, each carrying that tier's own texture.
@@ -64,7 +65,7 @@ object Models {
      * are only ever asked for after one of its cables has been found — so a server without Logistics
      * never reaches them and never shows a hole.
      */
-    val VALVE_ARMS: Map<String, NovaItem> =
+    val VALVE_ARMS: Map<String, RegistryEntry.Paper<ItemType>> =
         listOf("plain", "basic", "advanced", "elite", "ultimate", "creative")
             .associateWith { tier ->
                 item("energy_valve_arm_$tier") {
@@ -81,17 +82,17 @@ object Models {
      * top as a display entity. Sixty-four models serve five blocks where each used to carry a hundred and
      * twenty-eight of its own.
      */
-    val CONNECTOR_CORE: NovaItem = core("connector", lit = true)
-    val INTERFACE_CORE: NovaItem = core("interface", lit = true)
-    val FLUID_CONNECTOR_CORE: NovaItem = core("fluid_connector", lit = true)
-    val FLUID_INTERFACE_CORE: NovaItem = core("fluid_interface", lit = true)
+    val CONNECTOR_CORE: RegistryEntry.Paper<ItemType> = core("connector", lit = true)
+    val INTERFACE_CORE: RegistryEntry.Paper<ItemType> = core("interface", lit = true)
+    val FLUID_CONNECTOR_CORE: RegistryEntry.Paper<ItemType> = core("fluid_connector", lit = true)
+    val FLUID_INTERFACE_CORE: RegistryEntry.Paper<ItemType> = core("fluid_interface", lit = true)
 
-    val CONNECTOR_CORE_OFF: NovaItem = core("connector", lit = false)
-    val INTERFACE_CORE_OFF: NovaItem = core("interface", lit = false)
-    val FLUID_CONNECTOR_CORE_OFF: NovaItem = core("fluid_connector", lit = false)
-    val FLUID_INTERFACE_CORE_OFF: NovaItem = core("fluid_interface", lit = false)
+    val CONNECTOR_CORE_OFF: RegistryEntry.Paper<ItemType> = core("connector", lit = false)
+    val INTERFACE_CORE_OFF: RegistryEntry.Paper<ItemType> = core("interface", lit = false)
+    val FLUID_CONNECTOR_CORE_OFF: RegistryEntry.Paper<ItemType> = core("fluid_connector", lit = false)
+    val FLUID_INTERFACE_CORE_OFF: RegistryEntry.Paper<ItemType> = core("fluid_interface", lit = false)
 
-    private fun core(hub: String, lit: Boolean): NovaItem {
+    private fun core(hub: String, lit: Boolean): RegistryEntry.Paper<ItemType> {
         val path = if (lit) "core" else "core_off"
         return item(if (lit) "${hub}_core" else "${hub}_core_off") {
             hidden(true)
@@ -99,7 +100,7 @@ object Models {
         }
     }
 
-    private fun port(hub: String, lit: Boolean): NovaItem {
+    private fun port(hub: String, lit: Boolean): RegistryEntry.Paper<ItemType> {
         val path = if (lit) "attachment" else "attachment_off"
         return item(if (lit) "${hub}_attachment" else "${hub}_attachment_off") {
             hidden(true)

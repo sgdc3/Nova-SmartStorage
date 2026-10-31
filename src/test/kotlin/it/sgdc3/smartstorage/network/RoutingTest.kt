@@ -2,13 +2,12 @@ package it.sgdc3.smartstorage.network
 
 import it.sgdc3.smartstorage.ServerBacked
 import it.sgdc3.smartstorage.storage.ItemType
-import org.bukkit.Material
-import org.bukkit.inventory.ItemStack
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import xyz.xenondevs.nova.world.block.tileentity.network.type.fluid.FluidType
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.bukkit.inventory.ItemType as BukkitItemType
 
 /**
  * The order a storage system asks its providers in.
@@ -20,8 +19,8 @@ import kotlin.test.assertTrue
 @ServerBacked
 class RoutingTest {
 
-    private val cobble = ItemType.of(ItemStack.of(Material.COBBLESTONE))!!
-    private val dirt = ItemType.of(ItemStack.of(Material.DIRT))!!
+    private val cobble = ItemType.of(BukkitItemType.COBBLESTONE.createItemStack())!!
+    private val dirt = ItemType.of(BukkitItemType.DIRT.createItemStack())!!
 
     //<editor-fold desc="ordering and deduplication">
 

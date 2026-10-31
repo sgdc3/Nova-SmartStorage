@@ -6,16 +6,19 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
+import org.bukkit.inventory.ItemType
 import xyz.xenondevs.cbf.Compound
+import xyz.xenondevs.nova.config.ConfigProvider
 import xyz.xenondevs.nova.config.entry
+import xyz.xenondevs.nova.registry.RegistryEntry
 import xyz.xenondevs.nova.util.NumberFormatUtils
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
-import xyz.xenondevs.nova.util.item.novaItem
 import xyz.xenondevs.nova.util.item.retrieveData
 import xyz.xenondevs.nova.util.item.storeData
-import xyz.xenondevs.nova.world.item.NovaItem
 import xyz.xenondevs.nova.world.item.behavior.ItemBehavior
 import xyz.xenondevs.nova.world.item.behavior.ItemBehaviorFactory
+import xyz.xenondevs.nova.world.item.getBehaviorOrNull
+import xyz.xenondevs.nova.world.item.itemType
 
 /**
  * Turns an item into a fluid cell and carries its capacity.
@@ -26,9 +29,9 @@ import xyz.xenondevs.nova.world.item.behavior.ItemBehaviorFactory
  * many entries as Nova has fluid types, which is two, so the tooltip can afford to decode the real
  * thing every time it is drawn.
  */
-class FluidCellBehavior(item: NovaItem) : ItemBehavior {
+class FluidCellBehavior(config: ConfigProvider) : ItemBehavior {
 
-    val maxAmount: Long by item.config.entry<Long>("max_amount")
+    val maxAmount: Long by config.entry<Long>("max_amount")
 
     fun read(itemStack: ItemStack): FluidCellData =
         FluidCellData.fromCompound(itemStack.retrieveData<Compound>(SmartStorage, DATA_KEY), maxAmount)
@@ -66,13 +69,13 @@ class FluidCellBehavior(item: NovaItem) : ItemBehavior {
 
         private const val DATA_KEY = "fluid_cell"
 
-        override fun create(item: NovaItem) = FluidCellBehavior(item)
+        override fun create(entry: RegistryEntry.Paper<ItemType>, config: ConfigProvider) = FluidCellBehavior(config)
 
         /**
          * The fluid cell behavior of [itemStack], or null if it isn't a fluid cell.
          */
         fun of(itemStack: ItemStack?): FluidCellBehavior? =
-            itemStack?.novaItem?.getBehaviorOrNull<FluidCellBehavior>()
+            itemStack?.itemType?.getBehaviorOrNull<FluidCellBehavior>()
 
     }
 

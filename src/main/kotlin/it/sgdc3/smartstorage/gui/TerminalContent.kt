@@ -6,7 +6,6 @@ import it.sgdc3.smartstorage.storage.SortMode
 import it.sgdc3.smartstorage.storage.StorageEntry
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-import org.bukkit.Material
 import org.bukkit.entity.Player
 import org.bukkit.event.inventory.ClickType
 import xyz.xenondevs.commons.provider.MutableProvider
@@ -31,6 +30,7 @@ import xyz.xenondevs.nova.util.playClickSound
 import xyz.xenondevs.nova.world.item.DefaultGuiItems
 import kotlin.math.max
 import kotlin.math.min
+import org.bukkit.inventory.ItemType as BukkitItemType
 
 /**
  * The list of what a storage network holds, and everything a player can do to it by clicking.
@@ -216,7 +216,7 @@ internal class TerminalContent(private val network: () -> StorageNetwork?) {
 
     fun sortButton(sortMode: MutableProvider<SortMode>): Item = item {
         itemProvider by sortMode.map { mode ->
-            ItemBuilder(Material.HOPPER).setName(
+            ItemBuilder(BukkitItemType.HOPPER).setName(
                 Component.translatable(mode.localizationKey, NamedTextColor.GRAY).withoutPreFormatting()
             )
         }
@@ -230,7 +230,7 @@ internal class TerminalContent(private val network: () -> StorageNetwork?) {
 
     fun clearFilterButton(filter: MutableProvider<String>): Item = item {
         itemProvider by filter.map { text ->
-            ItemBuilder(Material.NAME_TAG).setName(
+            ItemBuilder(BukkitItemType.NAME_TAG).setName(
                 Component.translatable(
                     "menu.smartstorage.terminal.filter",
                     NamedTextColor.GRAY,
@@ -276,7 +276,7 @@ internal class TerminalContent(private val network: () -> StorageNetwork?) {
          * player it is an input rather than more of the same.
          */
         fun depositBackground(): ItemProvider =
-            DefaultGuiItems.TP_ARROW_DOWN_ON.createClientsideItemBuilder()
+            ItemBuilder(DefaultGuiItems.TP_ARROW_DOWN_ON.get())
                 .setName(
                     Component.translatable("menu.smartstorage.terminal.deposit", NamedTextColor.GRAY)
                         .withoutPreFormatting()

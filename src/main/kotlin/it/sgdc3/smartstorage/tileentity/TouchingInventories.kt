@@ -1,8 +1,9 @@
 package it.sgdc3.smartstorage.tileentity
 
+import it.sgdc3.smartstorage.util.nearbyNodes
+import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
 import xyz.xenondevs.nova.util.CUBE_FACES
-import xyz.xenondevs.nova.world.BlockPos
 import xyz.xenondevs.nova.world.block.tileentity.network.node.NetworkBridge
 import xyz.xenondevs.nova.world.block.tileentity.network.node.NetworkEndPoint
 import xyz.xenondevs.nova.world.block.tileentity.network.node.NetworkNode
@@ -131,12 +132,12 @@ private val PASSIVE_VANILLA_STORAGE = setOf("VanillaChestTileEntity", "VanillaCo
 
 internal suspend fun NetworkEndPoint.restrictItemFaces(
     state: NetworkState,
-    pos: BlockPos,
+    block: Block,
     holder: ItemHolder,
     extractOnlyFromBelow: Boolean
 ): Boolean {
     var changed = false
-    val nearby = state.getNearbyNodes(pos, CUBE_FACES)
+    val nearby = state.nearbyNodes(block)
 
     for (face in CUBE_FACES) {
         val node = nearby[face]
@@ -159,9 +160,9 @@ internal suspend fun NetworkEndPoint.restrictItemFaces(
         if (current == wanted)
             continue
 
-        holder.connectionConfig[face] = wanted
-        state.getNetwork(this, ITEM, face)?.markDirty()
-        state.handleEndPointAllowedFacesChange(this, ITEM, face)
+        holder.connectionConfig = holder.connectionConfig.with(face, wanted)
+        state.getNetwork(this, ITEM.get(), face)?.markDirty()
+        state.handleEndPointAllowedFacesChange(this, ITEM.get(), face)
         changed = true
     }
 
@@ -180,10 +181,10 @@ internal class TouchingInventories {
      * Identity throughout, not equality: two inventories that compare equal are still two different
      * pieces of storage, and the question here is only which object is on the other side.
      */
-    fun refresh(state: NetworkState, pos: BlockPos) {
+    fun refresh(state: NetworkState, block: Block) {
         val found = Collections.newSetFromMap(IdentityHashMap<NetworkedInventory, Boolean>())
 
-        for (node in state.getNearbyNodes(pos, CUBE_FACES).values) {
+        for (node in state.nearbyNodes(block).values) {
             // the same line the faces are drawn on: a hopper or a machine against this block is a build
             // somebody made on purpose, and refusing it would break it
             if (node !is NetworkEndPoint || !isPassiveStorage(node))

@@ -16,7 +16,7 @@ import xyz.xenondevs.nova.world.item.DefaultGuiItems
  * way. Nova's numbered GUI item carries the digits; the lore carries the rule.
  */
 internal fun priorityIcon(priority: Int): ItemBuilder =
-    DefaultGuiItems.NUMBER.createClientsideItemBuilder()
+    ItemBuilder(DefaultGuiItems.NUMBER.get())
         .addCustomModelData(priority)
         .setName(
             Component.translatable(

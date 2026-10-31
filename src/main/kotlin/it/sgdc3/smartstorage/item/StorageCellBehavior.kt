@@ -29,8 +29,10 @@ import xyz.xenondevs.nova.world.item.itemType
  */
 class StorageCellBehavior(config: ConfigProvider) : ItemBehavior {
 
-    val maxTypes: Int by config.entry<Int>("max_types")
-    val maxItems: Long by config.entry<Long>("max_items")
+    // Defaults are the 1k cell's: every tier ships its own values, and a tier whose config has lost one
+    // should fall back to holding less than it promised rather than more.
+    val maxTypes: Int by config.entry<Int>(8, "max_types")
+    val maxItems: Long by config.entry<Long>(8_192L, "max_items")
 
     /**
      * Reads the contents [itemStack] carries, using this behavior's tier limits.

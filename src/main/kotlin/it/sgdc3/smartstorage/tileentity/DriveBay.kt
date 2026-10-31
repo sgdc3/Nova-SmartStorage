@@ -26,6 +26,8 @@ import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.block.Block
 import org.bukkit.inventory.ItemStack
 import xyz.xenondevs.cbf.Compound
+import xyz.xenondevs.commons.provider.mutableProvider
+import xyz.xenondevs.commons.provider.provider
 import xyz.xenondevs.invui.dsl.NormalSplitWindowDsl
 import xyz.xenondevs.invui.gui.Gui
 import xyz.xenondevs.invui.inventory.VirtualInventory
@@ -37,8 +39,8 @@ import xyz.xenondevs.nova.addon.simpleupgrades.storedUpgradeHolder
 import xyz.xenondevs.nova.config.entry
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
-import xyz.xenondevs.nova.ui.menu.item.AddNumberItem
-import xyz.xenondevs.nova.ui.menu.item.RemoveNumberItem
+import xyz.xenondevs.nova.ui.menu.item.addNumberItem
+import xyz.xenondevs.nova.ui.menu.item.removeNumberItem
 import xyz.xenondevs.nova.util.NumberFormatUtils
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
 import xyz.xenondevs.nova.world.block.NovaBlockState
@@ -56,7 +58,7 @@ import org.bukkit.inventory.ItemType as BukkitItemType
  */
 private const val MAX_CELL_SLOTS = 12
 
-private val BASE_SLOTS by DRIVE_BAY.config.entry<Int>("base_slots")
+private val BASE_SLOTS by DRIVE_BAY.config.entry<Int>(6, "base_slots")
 
 /**
  * Holds the disks that give a network its capacity — storage cells for items, fluid cells for water and
@@ -93,6 +95,15 @@ class DriveBay(
 
     private val priorityValue = storedValue("priority") { DEFAULT_PRIORITY }
     override var priority: Int by priorityValue
+
+    /**
+     * What the menu's minus and plus change. Here rather than in the menu because each viewer has a menu
+     * of their own, and two of them each holding a copy of the number would each step from their own.
+     */
+    private val priorityNumber = mutableProvider({ priority }) { value ->
+        priority = value
+        menus.forEach(DriveBayMenu::update)
+    }
 
     private val cells = arrayOfNulls<CellData>(MAX_CELL_SLOTS)
     private val behaviors = arrayOfNulls<StorageCellBehavior>(MAX_CELL_SLOTS)
@@ -557,19 +568,14 @@ class DriveBay(
             .addIngredient('i', statusItem)
             .addIngredient('n', networkItem)
             .addIngredient('v', priorityItem)
-            .addIngredient('p', AddNumberItem({ PRIORITY_RANGE }, { priority }, ::setPriority, "menu.smartstorage.priority_up"))
-            .addIngredient('m', RemoveNumberItem({ PRIORITY_RANGE }, { priority }, ::setPriority, "menu.smartstorage.priority_down"))
+            .addIngredient('p', addNumberItem(provider(PRIORITY_RANGE), priorityNumber, "menu.smartstorage.priority_up"))
+            .addIngredient('m', removeNumberItem(provider(PRIORITY_RANGE), priorityNumber, "menu.smartstorage.priority_down"))
             .build()
 
         fun update() {
             statusItem.notifyWindows()
             networkItem.notifyWindows()
             priorityItem.notifyWindows()
-        }
-
-        private fun setPriority(value: Int) {
-            priority = value
-            update()
         }
 
         private fun statusIcon(): ItemBuilder {

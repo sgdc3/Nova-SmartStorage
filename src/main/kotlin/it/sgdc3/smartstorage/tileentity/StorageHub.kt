@@ -1,6 +1,7 @@
 package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.registry.BlockStateProperties
+import it.sgdc3.smartstorage.util.ItemDisplays
 import it.sgdc3.smartstorage.util.boxTowards
 import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
@@ -19,8 +20,6 @@ import xyz.xenondevs.nova.world.block.NovaBlockState
 import xyz.xenondevs.nova.world.block.hitbox.Hitbox
 import xyz.xenondevs.nova.world.block.hitbox.VirtualHitbox
 import xyz.xenondevs.nova.world.block.tileentity.NetworkedTileEntity
-import xyz.xenondevs.nova.world.model.FixedMultiModel
-import xyz.xenondevs.nova.world.model.Model
 
 /**
  * The shape shared by the two devices that mount onto their neighbours instead of standing beside them:
@@ -71,7 +70,10 @@ abstract class StorageHub(
     protected open val coreModel: RegistryEntry.Paper<ItemType>? = null
     protected open val coreModelOff: RegistryEntry.Paper<ItemType>? = null
 
-    private val multiModel = FixedMultiModel()
+    /**
+     * Keyed by the side a port points at, and by [Core] for the core.
+     */
+    private val displays = ItemDisplays<Any> { block.location.add(0.5, 0.5, 0.5) }
     private var portFaces: Set<BlockFace> = emptySet()
     private var armFaces: Set<BlockFace> = emptySet()
     private var powered: Boolean = false
@@ -108,7 +110,7 @@ abstract class StorageHub(
     }
 
     override fun handleDisable() {
-        multiModel.clear()
+        displays.clear()
         hitboxes.forEach(Hitbox<*, *>::remove)
         hitboxes = emptySet()
         portFaces = emptySet()
@@ -217,27 +219,26 @@ abstract class StorageHub(
     protected fun refreshPortModels() = applyPortModels()
 
     private fun applyPortModels() {
-        val models = portFaces.mapNotNullTo(HashSet<Model>()) { face ->
-                val item = portModelFor(face) ?: return@mapNotNullTo null
-
-                Model(
-                    item.get(),
-                    block.location.add(0.5, 0.5, 0.5),
-                    // the port model is authored pointing south while a display entity turns a model's
-                    // north side south, so an unrotated port already points north — this is the
-                    // difference from there
-                    leftRotation = Quaternionf()
-                        .rotateY(Math.toRadians(180.0 - face.yaw).toFloat())
-                        .rotateX(Math.toRadians(-face.pitch.toDouble()).toFloat())
-                )
-            }
+        val models = HashMap<Any, ItemDisplays.Model>()
+        for (face in portFaces) {
+            val item = portModelFor(face) ?: continue
+            models[face] = ItemDisplays.Model(
+                item.get(),
+                // the port model is authored pointing south while a display entity turns a model's
+                // north side south, so an unrotated port already points north — this is the
+                // difference from there
+                Quaternionf()
+                    .rotateY(Math.toRadians(180.0 - face.yaw).toFloat())
+                    .rotateX(Math.toRadians(-face.pitch.toDouble()).toFloat())
+            )
+        }
 
         // unrotated: a core is a cube in the middle and looks the same whichever way it is turned
         (if (powered) coreModel else coreModelOff)?.let { core ->
-            models += Model(core.get(), block.location.add(0.5, 0.5, 0.5))
+            models[Core] = ItemDisplays.Model(core.get())
         }
 
-        multiModel.replaceModels(models)
+        displays.show(models)
     }
 
     //</editor-fold>
@@ -264,3 +265,8 @@ abstract class StorageHub(
     }
 
 }
+
+/**
+ * The key a hub's core is drawn under, beside the six sides its ports are drawn under.
+ */
+private object Core

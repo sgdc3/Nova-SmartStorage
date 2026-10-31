@@ -2,6 +2,7 @@ package it.sgdc3.smartstorage.tileentity
 
 import it.sgdc3.smartstorage.registry.Blocks.ENERGY_VALVE
 import it.sgdc3.smartstorage.registry.Models
+import it.sgdc3.smartstorage.util.ItemDisplays
 import it.sgdc3.smartstorage.util.nearbyNodes
 import org.bukkit.Bukkit
 import org.bukkit.block.Block
@@ -36,18 +37,16 @@ import xyz.xenondevs.nova.world.block.tileentity.network.type.item.holder.ItemHo
 import xyz.xenondevs.nova.world.block.tileentity.network.type.item.inventory.NetworkedInventory
 import xyz.xenondevs.nova.world.chunkPos
 import xyz.xenondevs.nova.world.format.NetworkState
-import xyz.xenondevs.nova.world.model.FixedMultiModel
-import xyz.xenondevs.nova.world.model.Model
 import kotlin.math.max
 import kotlin.math.min
 
-private val MAX_ENERGY = ENERGY_VALVE.config.entry<Long>("max_energy")
+private val MAX_ENERGY = ENERGY_VALVE.config.entry<Long>(5_000L, "max_energy")
 
 /**
  * Ticks between two looks at *where* the machines are. Whether their outputs are full is checked every
  * tick — see [EnergyValve.handleTick].
  */
-private val WATCH_TICKS by ENERGY_VALVE.config.entry<Int>("watch_ticks")
+private val WATCH_TICKS by ENERGY_VALVE.config.entry<Int>(20, "watch_ticks")
 
 /**
  * The arm this addon draws when the tier is not one it has artwork for, and the one it draws between two
@@ -159,7 +158,7 @@ class EnergyValve(
      * alone and these are turned onto their faces at runtime — the same trade [StorageHub] already makes
      * for its ports, for the same reason.
      */
-    private val armModel = FixedMultiModel()
+    private val armModel = ItemDisplays<BlockFace> { block.location.add(0.5, 0.5, 0.5) }
 
     /**
      * The output buffers of each machine around the valve, remembered between scans.
@@ -392,19 +391,18 @@ class EnergyValve(
      * entities.
      */
     private fun applyArms(tiers: Map<BlockFace, String>) {
-        armModel.replaceModels(
-            tiers.mapNotNullTo(HashSet()) { (face, tier) ->
-                val item = Models.VALVE_ARMS[tier] ?: return@mapNotNullTo null
+        armModel.show(
+            tiers.entries.mapNotNull { (face, tier) ->
+                val item = Models.VALVE_ARMS[tier] ?: return@mapNotNull null
 
-                Model(
+                face to ItemDisplays.Model(
                     item.get(),
-                    block.location.add(0.5, 0.5, 0.5),
                     // authored pointing south, like the ports, and turned the same way
-                    leftRotation = Quaternionf()
+                    Quaternionf()
                         .rotateY(Math.toRadians(180.0 - face.yaw).toFloat())
                         .rotateX(Math.toRadians(-face.pitch.toDouble()).toFloat())
                 )
-            }
+            }.toMap()
         )
     }
 

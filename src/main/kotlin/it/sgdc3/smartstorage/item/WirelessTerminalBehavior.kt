@@ -79,10 +79,10 @@ import kotlin.math.max
  */
 class WirelessTerminalBehavior(config: ConfigProvider) : ItemBehavior {
 
-    private val baseRange: Double by config.entry<Double>("base_range")
-    private val rangePerUpgrade: Double by config.entry<Double>("range_per_upgrade")
-    private val maxUpgrades: Int by config.entry<Int>("max_range_upgrades")
-    private val maxBulkCrafts: Int by config.entry<Int>("max_bulk_crafts")
+    private val baseRange: Double by config.entry<Double>(16.0, "base_range")
+    private val rangePerUpgrade: Double by config.entry<Double>(48.0, "range_per_upgrade")
+    private val maxUpgrades: Int by config.entry<Int>(5, "max_range_upgrades")
+    private val maxBulkCrafts: Int by config.entry<Int>(64, "max_bulk_crafts")
 
     /**
      * Right-click in the air.

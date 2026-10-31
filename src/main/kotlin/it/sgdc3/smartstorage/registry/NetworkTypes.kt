@@ -24,7 +24,7 @@ internal val SMART_STORAGE_CONFIG = CONFIGS["smartstorage:config"]
  * shows figures it has to go and fetch uses it: both item terminals, the fluid terminal, the wireless
  * terminal and a connector's per-side slot counts.
  */
-internal val TERMINAL_REFRESH_TICKS by SMART_STORAGE_CONFIG.node("terminal").entry<Int>("refresh_ticks")
+internal val TERMINAL_REFRESH_TICKS by SMART_STORAGE_CONFIG.node("terminal").entry<Int>(20, "refresh_ticks")
 
 /**
  * Registers `smartstorage:storage` as a fourth network type alongside Nova's energy, item and fluid
@@ -37,7 +37,7 @@ internal val TERMINAL_REFRESH_TICKS by SMART_STORAGE_CONFIG.node("terminal").ent
 @Init(stage = InitStage.PRE_PACK)
 object NetworkTypes {
 
-    val TICK_DELAY_PROVIDER: Provider<Int> = SMART_STORAGE_CONFIG.node("network").entry<Int>("tick_delay")
+    val TICK_DELAY_PROVIDER: Provider<Int> = SMART_STORAGE_CONFIG.node("network").entry<Int>(10, "tick_delay")
 
     val STORAGE = SmartStorage.registerNetworkType(
         "storage",

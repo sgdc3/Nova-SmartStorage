@@ -31,7 +31,8 @@ import xyz.xenondevs.nova.world.item.itemType
  */
 class FluidCellBehavior(config: ConfigProvider) : ItemBehavior {
 
-    val maxAmount: Long by config.entry<Long>("max_amount")
+    // the 16b cell's, for the same reason as the storage cell's: less than promised rather than more
+    val maxAmount: Long by config.entry<Long>(16_000L, "max_amount")
 
     fun read(itemStack: ItemStack): FluidCellData =
         FluidCellData.fromCompound(itemStack.retrieveData<Compound>(SmartStorage, DATA_KEY), maxAmount)

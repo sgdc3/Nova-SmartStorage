@@ -28,6 +28,8 @@ import org.bukkit.entity.Player
 import xyz.xenondevs.cbf.Compound
 import xyz.xenondevs.commons.collections.enumMap
 import xyz.xenondevs.commons.collections.toEnumSet
+import xyz.xenondevs.commons.provider.mutableProvider
+import xyz.xenondevs.commons.provider.provider
 import xyz.xenondevs.invui.dsl.NormalSplitWindowDsl
 import xyz.xenondevs.invui.dsl.window
 import xyz.xenondevs.invui.gui.Gui
@@ -40,8 +42,8 @@ import xyz.xenondevs.nova.config.entry
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
 import xyz.xenondevs.nova.registry.RegistryEntry
-import xyz.xenondevs.nova.ui.menu.item.AddNumberItem
-import xyz.xenondevs.nova.ui.menu.item.RemoveNumberItem
+import xyz.xenondevs.nova.ui.menu.item.addNumberItem
+import xyz.xenondevs.nova.ui.menu.item.removeNumberItem
 import xyz.xenondevs.nova.ui.overlay.guitexture.getTitle
 import xyz.xenondevs.nova.util.CUBE_FACES
 import xyz.xenondevs.nova.util.CubeFaceMap
@@ -63,15 +65,15 @@ import kotlin.math.max
 import kotlin.math.roundToLong
 import org.bukkit.inventory.ItemType as BukkitItemType
 
-private val EXPOSED_SLOTS by STORAGE_INTERFACE.config.entry<Int>("exposed_slots")
-private val BASE_ITEM_TRANSFER by STORAGE_INTERFACE.config.entry<Double>("base_item_transfer")
+private val EXPOSED_SLOTS by STORAGE_INTERFACE.config.entry<Int>(27, "exposed_slots")
+private val BASE_ITEM_TRANSFER by STORAGE_INTERFACE.config.entry<Double>(8.0, "base_item_transfer")
 
 /**
  * How often the neighbours are re-read for the menu icons. Nothing routes on this, so a second is well
  * inside "instant" and there is no reason to pay for it every tick — but it is a knob like every other
  * scan interval in this addon, rather than the one that was nailed shut.
  */
-private val NEIGHBOUR_RESCAN_TICKS by STORAGE_INTERFACE.config.entry<Int>("neighbour_rescan_ticks")
+private val NEIGHBOUR_RESCAN_TICKS by STORAGE_INTERFACE.config.entry<Int>(20, "neighbour_rescan_ticks")
 
 /**
  * Bridges a storage network's *items* into Nova's item network.
@@ -528,6 +530,10 @@ class StorageInterface(
          * The two directions on the top row with their filters under them, and the side's summary clear
          * of both.
          */
+        // Both buttons share it, so pressing one redraws the other at the end of the range. Setting it is
+        // what changes the priority: the provider calls [setPriority].
+        private val priorityNumber = mutableProvider({ priorityOf(face) }, ::setPriority)
+
         private val gui = Gui.builder()
             .setStructure(
                 ". . n x . i . . .",
@@ -542,8 +548,8 @@ class StorageInterface(
             .addIngredient('b', extractFilterInventory, ItemBuilder(GuiItems.INSERT_FILTER_PLACEHOLDER.get()))
             .addIngredient('i', statusItem)
             .addIngredient('v', priorityItem)
-            .addIngredient('m', RemoveNumberItem({ PRIORITY_RANGE }, { priorityOf(face) }, ::setPriority, "menu.smartstorage.priority_down"))
-            .addIngredient('p', AddNumberItem({ PRIORITY_RANGE }, { priorityOf(face) }, ::setPriority, "menu.smartstorage.priority_up"))
+            .addIngredient('m', removeNumberItem(provider(PRIORITY_RANGE), priorityNumber, "menu.smartstorage.priority_down"))
+            .addIngredient('p', addNumberItem(provider(PRIORITY_RANGE), priorityNumber, "menu.smartstorage.priority_up"))
             .build()
 
         fun open(player: Player) {

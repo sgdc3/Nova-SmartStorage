@@ -22,6 +22,8 @@ import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemType
 import xyz.xenondevs.cbf.Compound
 import xyz.xenondevs.commons.collections.enumMap
+import xyz.xenondevs.commons.provider.mutableProvider
+import xyz.xenondevs.commons.provider.provider
 import xyz.xenondevs.invui.dsl.NormalSplitWindowDsl
 import xyz.xenondevs.invui.dsl.window
 import xyz.xenondevs.invui.gui.Gui
@@ -29,8 +31,8 @@ import xyz.xenondevs.invui.item.ItemBuilder
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
 import xyz.xenondevs.nova.registry.RegistryEntry
-import xyz.xenondevs.nova.ui.menu.item.AddNumberItem
-import xyz.xenondevs.nova.ui.menu.item.RemoveNumberItem
+import xyz.xenondevs.nova.ui.menu.item.addNumberItem
+import xyz.xenondevs.nova.ui.menu.item.removeNumberItem
 import xyz.xenondevs.nova.ui.overlay.guitexture.getTitle
 import xyz.xenondevs.nova.util.CUBE_FACES
 import xyz.xenondevs.nova.util.NumberFormatUtils
@@ -401,6 +403,10 @@ class FluidConnector(
 
             private val priorityItem = ClickableItem({ priorityIcon(priority) })
 
+            // Both buttons share it, so pressing one redraws the other at the end of the range. Setting it is
+            // what changes the priority: the provider calls [setPriority].
+            private val priorityNumber = mutableProvider({ priority }, ::setPriority)
+
             private val gui = Gui.builder()
                 .setStructure(
                     ". . . . . . . . .",
@@ -411,8 +417,8 @@ class FluidConnector(
                 .addIngredient('x', extractItem)
                 .addIngredient('i', statusItem)
                 .addIngredient('v', priorityItem)
-                .addIngredient('m', RemoveNumberItem({ PRIORITY_RANGE }, { priority }, ::setPriority, "menu.smartstorage.priority_down"))
-                .addIngredient('p', AddNumberItem({ PRIORITY_RANGE }, { priority }, ::setPriority, "menu.smartstorage.priority_up"))
+                .addIngredient('m', removeNumberItem(provider(PRIORITY_RANGE), priorityNumber, "menu.smartstorage.priority_down"))
+                .addIngredient('p', addNumberItem(provider(PRIORITY_RANGE), priorityNumber, "menu.smartstorage.priority_up"))
                 .build()
 
             fun open(player: Player) {

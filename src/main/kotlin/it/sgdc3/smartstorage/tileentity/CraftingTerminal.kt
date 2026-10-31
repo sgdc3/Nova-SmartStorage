@@ -25,7 +25,7 @@ import xyz.xenondevs.nova.util.playClickSound
 import xyz.xenondevs.nova.world.block.NovaBlockState
 import xyz.xenondevs.nova.world.block.config
 
-private val MAX_BULK_CRAFTS by CRAFTING_TERMINAL.config.entry<Int>("max_bulk_crafts")
+private val MAX_BULK_CRAFTS by CRAFTING_TERMINAL.config.entry<Int>(64, "max_bulk_crafts")
 
 /**
  * A terminal with a crafting grid that restocks itself from the network.

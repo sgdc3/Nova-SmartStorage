@@ -1,19 +1,23 @@
 package it.sgdc3.smartstorage.tileentity
 
 import net.kyori.adventure.text.Component
+import org.bukkit.Color
 import org.bukkit.Location
 import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
 import org.bukkit.entity.Display
 import org.bukkit.entity.ItemDisplay
-import org.bukkit.entity.TextDisplay
 import org.bukkit.inventory.ItemStack
 import org.joml.Math
 import org.joml.Quaternionf
 import org.joml.Vector3f
+import xyz.xenondevs.nova.packetentity.ItemDisplayMetadata
+import xyz.xenondevs.nova.packetentity.PacketEntity
+import xyz.xenondevs.nova.packetentity.TextDisplayMetadata
+import xyz.xenondevs.nova.packetentity.clearAndDespawn
+import xyz.xenondevs.nova.packetentity.packetItemDisplay
+import xyz.xenondevs.nova.packetentity.packetTextDisplay
 import xyz.xenondevs.nova.util.yaw
-import xyz.xenondevs.nova.world.fakeentity.impl.FakeItemDisplay
-import xyz.xenondevs.nova.world.fakeentity.impl.FakeTextDisplay
 
 /**
  * How far the displays float out of the block, measured from its middle — so anything over 0.5 is
@@ -138,8 +142,8 @@ class BarrelFace(private val block: Block, private val facing: BlockFace) {
      */
     private val rotation = Quaternionf().rotateY(Math.toRadians(-facing.yaw.toDouble()).toFloat())
 
-    private val items = ArrayList<FakeItemDisplay>(EXPOSED_TIERS)
-    private val labels = ArrayList<FakeTextDisplay>(EXPOSED_TIERS)
+    private val items = ArrayList<PacketEntity<ItemDisplayMetadata>>(EXPOSED_TIERS)
+    private val labels = ArrayList<PacketEntity<TextDisplayMetadata>>(EXPOSED_TIERS)
 
     private var shown: List<FaceCell> = emptyList()
 
@@ -163,19 +167,17 @@ class BarrelFace(private val block: Block, private val facing: BlockFace) {
         for ((index, cell) in cells.withIndex()) {
             val was = shown[index]
             if (cell.stack != was.stack)
-                items[index].updateEntityData(true) { itemStack = cell.stack }
+                items[index].metadata.itemStack = cell.stack
             if (cell.text != was.text)
-                labels[index].updateEntityData(true) { text = cell.text }
+                labels[index].metadata.text = cell.text
         }
 
         shown = cells
     }
 
     fun clear() {
-        items.forEach(FakeItemDisplay::remove)
-        items.clear()
-        labels.forEach(FakeTextDisplay::remove)
-        labels.clear()
+        items.clearAndDespawn()
+        labels.clearAndDespawn()
         shown = emptyList()
     }
 
@@ -187,28 +189,33 @@ class BarrelFace(private val block: Block, private val facing: BlockFace) {
         for ((index, cell) in cells.withIndex()) {
             val layout = layouts[index]
 
-            items += FakeItemDisplay(anchor(layout.side, layout.itemUp, ITEM_DEPTH), true) { _, data ->
-                data.itemStack = cell.stack
-                // the item-frame transform: the item lies flat rather than hovering as a 3D block
-                data.itemDisplay = ItemDisplay.ItemDisplayTransform.FIXED
-                data.billboardConstraints = Display.Billboard.FIXED
-                data.leftRotation = rotation
-                data.scale = Vector3f(layout.itemScale, layout.itemScale, layout.itemScale)
-                data.viewRange = ITEM_VIEW_RANGE
-            }
+            items += packetItemDisplay {
+                location by anchor(layout.side, layout.itemUp, ITEM_DEPTH)
+                metadata {
+                    itemStack by cell.stack
+                    // the item-frame transform: the item lies flat rather than hovering as a 3D block
+                    itemDisplay by ItemDisplay.ItemDisplayTransform.FIXED
+                    billboardRenderConstraints by Display.Billboard.FIXED
+                    leftRotation by rotation
+                    scale by Vector3f(layout.itemScale, layout.itemScale, layout.itemScale)
+                    viewRange by ITEM_VIEW_RANGE
+                }
+            }.apply { spawn() }
 
-            labels += FakeTextDisplay(anchor(layout.side, layout.textUp, LABEL_DEPTH), true) { _, data ->
-                data.text = cell.text
-                data.billboardConstraints = Display.Billboard.FIXED
-                data.leftRotation = rotation
-                data.scale = Vector3f(layout.textScale, layout.textScale, layout.textScale)
-                data.viewRange = LABEL_VIEW_RANGE
-                data.alignment = TextDisplay.TextAlignment.CENTER
-                // no panel behind the digits: the barrel's own front is the background
-                data.defaultBackground = false
-                data.backgroundColor = 0
-                data.hasShadow = true
-            }
+            labels += packetTextDisplay {
+                location by anchor(layout.side, layout.textUp, LABEL_DEPTH)
+                metadata {
+                    text by cell.text
+                    billboardRenderConstraints by Display.Billboard.FIXED
+                    leftRotation by rotation
+                    scale by Vector3f(layout.textScale, layout.textScale, layout.textScale)
+                    viewRange by LABEL_VIEW_RANGE
+                    // no panel behind the digits: the barrel's own front is the background. Leaving both
+                    // alignment bits clear centres the text.
+                    backgroundColor by Color.fromARGB(0)
+                    styleFlags[TEXT_SHADOW] by true
+                }
+            }.apply { spawn() }
         }
     }
 
@@ -256,3 +263,8 @@ class BarrelFace(private val block: Block, private val facing: BlockFace) {
     )
 
 }
+
+/**
+ * Bit 0 of a text display's style flags, as the game numbers them: draw the text with a shadow.
+ */
+private const val TEXT_SHADOW = 0

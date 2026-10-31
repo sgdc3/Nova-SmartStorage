@@ -31,7 +31,7 @@ import xyz.xenondevs.nova.config.entry
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
 import xyz.xenondevs.nova.context.intention.BlockInteract
-import xyz.xenondevs.nova.ui.menu.EnergyBar
+import xyz.xenondevs.nova.ui.menu.energyBar
 import xyz.xenondevs.nova.ui.menu.sideconfig.openSideConfigItem
 import xyz.xenondevs.nova.util.NumberFormatUtils
 import xyz.xenondevs.nova.util.component.adventure.withoutPreFormatting
@@ -43,10 +43,10 @@ import xyz.xenondevs.nova.world.block.tileentity.NetworkedTileEntity
 import xyz.xenondevs.nova.world.block.tileentity.network.type.NetworkConnectionType
 import kotlin.math.roundToLong
 
-private val MAX_ENERGY = STORAGE_CONTROLLER.config.entry<Long>("max_energy")
-private val ENERGY_PER_DEVICE = STORAGE_CONTROLLER.config.entry<Long>("energy_per_device")
-private val ENERGY_PER_CELL = STORAGE_CONTROLLER.config.entry<Long>("energy_per_cell")
-private val MAX_DEVICES_PROVIDER = STORAGE_CONTROLLER.config.entry<Int>("max_devices")
+private val MAX_ENERGY = STORAGE_CONTROLLER.config.entry<Long>(200_000L, "max_energy")
+private val ENERGY_PER_DEVICE = STORAGE_CONTROLLER.config.entry<Long>(4L, "energy_per_device")
+private val ENERGY_PER_CELL = STORAGE_CONTROLLER.config.entry<Long>(8L, "energy_per_cell")
+private val MAX_DEVICES_PROVIDER = STORAGE_CONTROLLER.config.entry<Int>(64, "max_devices")
 
 /**
  * Powers and bounds a storage network. Exactly one is required: with none the network is inert, with
@@ -215,7 +215,7 @@ class StorageController(
             .addIngredient('s', with(host) { openSideConfigItem() })
             .addIngredient('u', with(host) { openUpgradesItem(upgradeHolder) })
             .addIngredient('i', statusItem)
-            .addIngredient('e', EnergyBar(3, energyHolder))
+            .addIngredient('e', energyBar(energyHolder))
             .build()
 
         fun update() {

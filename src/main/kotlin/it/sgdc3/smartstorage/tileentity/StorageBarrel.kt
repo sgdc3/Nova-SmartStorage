@@ -62,7 +62,7 @@ import kotlin.math.max
 import kotlin.math.min
 import org.bukkit.inventory.ItemType as BukkitItemType
 
-private val BASE_STACKS by STORAGE_BARREL.config.entry<Int>("base_stacks")
+private val BASE_STACKS by STORAGE_BARREL.config.entry<Int>(32, "base_stacks")
 
 /**
  * The stack size a barrel is measured against while it holds nothing. Only ever used to print a

@@ -58,8 +58,8 @@ import kotlin.math.max
 import kotlin.math.min
 import org.bukkit.inventory.ItemType as BukkitItemType
 
-private val MAX_BARRELS by BARREL_CONTROLLER.config.entry<Int>("max_barrels")
-private val RESCAN_TICKS by BARREL_CONTROLLER.config.entry<Int>("rescan_ticks")
+private val MAX_BARRELS by BARREL_CONTROLLER.config.entry<Int>(64, "max_barrels")
+private val RESCAN_TICKS by BARREL_CONTROLLER.config.entry<Int>(20, "rescan_ticks")
 
 /**
  * How many slots the item network sees, so that it addresses the wall rather than the block it is

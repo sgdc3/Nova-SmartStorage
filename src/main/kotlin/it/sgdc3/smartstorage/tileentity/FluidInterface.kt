@@ -26,6 +26,8 @@ import org.bukkit.inventory.ItemType
 import xyz.xenondevs.cbf.Compound
 import xyz.xenondevs.commons.collections.enumMap
 import xyz.xenondevs.commons.collections.toEnumSet
+import xyz.xenondevs.commons.provider.mutableProvider
+import xyz.xenondevs.commons.provider.provider
 import xyz.xenondevs.invui.dsl.NormalSplitWindowDsl
 import xyz.xenondevs.invui.dsl.window
 import xyz.xenondevs.invui.gui.Gui
@@ -37,8 +39,8 @@ import xyz.xenondevs.nova.config.entry
 import xyz.xenondevs.nova.context.Context
 import xyz.xenondevs.nova.context.intention.BlockBreak
 import xyz.xenondevs.nova.registry.RegistryEntry
-import xyz.xenondevs.nova.ui.menu.item.AddNumberItem
-import xyz.xenondevs.nova.ui.menu.item.RemoveNumberItem
+import xyz.xenondevs.nova.ui.menu.item.addNumberItem
+import xyz.xenondevs.nova.ui.menu.item.removeNumberItem
 import xyz.xenondevs.nova.ui.overlay.guitexture.getTitle
 import xyz.xenondevs.nova.util.CUBE_FACES
 import xyz.xenondevs.nova.util.CubeFaceMap
@@ -63,7 +65,7 @@ import kotlin.math.roundToLong
 
 private const val NEIGHBOUR_RESCAN_TICKS = 20
 
-private val BASE_TRANSFER by FLUID_INTERFACE.config.entry<Double>("base_transfer")
+private val BASE_TRANSFER by FLUID_INTERFACE.config.entry<Double>(100.0, "base_transfer")
 
 /**
  * Bridges a storage network's *fluids* into Nova's fluid network, as [StorageInterface] does for items.
@@ -364,6 +366,10 @@ class FluidInterface(
 
         private val priorityItem = ClickableItem({ priorityIcon(priorityOf(face)) })
 
+        // Both buttons share it, so pressing one redraws the other at the end of the range. Setting it is
+        // what changes the priority: the provider calls [setPriority].
+        private val priorityNumber = mutableProvider({ priorityOf(face) }, ::setPriority)
+
         private val gui = Gui.builder()
             .setStructure(
                 ". . . . . . . . .",
@@ -375,8 +381,8 @@ class FluidInterface(
             .addIngredient('i', statusItem)
             .addIngredient('k', fluidKindItem)
             .addIngredient('v', priorityItem)
-            .addIngredient('m', RemoveNumberItem({ PRIORITY_RANGE }, { priorityOf(face) }, ::setPriority, "menu.smartstorage.priority_down"))
-            .addIngredient('p', AddNumberItem({ PRIORITY_RANGE }, { priorityOf(face) }, ::setPriority, "menu.smartstorage.priority_up"))
+            .addIngredient('m', removeNumberItem(provider(PRIORITY_RANGE), priorityNumber, "menu.smartstorage.priority_down"))
+            .addIngredient('p', addNumberItem(provider(PRIORITY_RANGE), priorityNumber, "menu.smartstorage.priority_up"))
             .build()
 
         fun open(player: Player) {

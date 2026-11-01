@@ -1,19 +1,16 @@
 package it.sgdc3.smartstorage.util
 
-import org.bukkit.GameMode
 import org.bukkit.Location
 import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
 import org.joml.Math
 import org.joml.Matrix4d
 import org.joml.Vector3d
-import xyz.xenondevs.nova.context.Context
-import xyz.xenondevs.nova.context.intention.BlockBreak
-import xyz.xenondevs.nova.util.BlockUtils
 import xyz.xenondevs.nova.util.add
 import xyz.xenondevs.nova.util.pitch
 import xyz.xenondevs.nova.util.yaw
-import xyz.xenondevs.nova.world.block.hitbox.VirtualHitbox
+import xyz.xenondevs.nova.world.block.HitboxCuboid
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 
@@ -40,22 +37,40 @@ internal fun Block.boxTowards(a: Vector3d, b: Vector3d, face: BlockFace): Pair<L
         Location(world, max(first.x, second.x), max(first.y, second.y), max(first.z, second.z))
 }
 
+/** Where a cable arm's cross-section starts, and how wide it is: the model's 6.75..9.25, over 16. */
+private const val ARM_MIN = 6.75 / 16.0
+private const val ARM_SIZE = 2.5 / 16.0
+
 /**
- * A hitbox that breaks the block at [block] when left-clicked.
+ * Nova's own hitboxes for a cube core of half-size [coreHalf] around the block centre and an arm towards
+ * each of [faces], matching the cable model.
  *
- * Blocks whose backing state has no shape of its own cannot be mined the usual way, so this stands in
- * for it — and the substitution is not free: the break is immediate, with no mining animation and no
- * regard for hardness, because Minecraft only runs its mining timer against a real block. The same
- * trade Nova's own cables make.
+ * Nova backs each with an interaction entity and turns a hit on one into a hit on the block, so mining
+ * runs Minecraft's own timer — hardness, tool and crack animation included — which a virtual hitbox
+ * could never do. The price is the shape: an interaction entity is square across the horizontal plane,
+ * so an arm lying sideways is a row of small cubes rather than one long box.
  */
-internal fun destructionHitbox(block: Block, from: Location, to: Location): VirtualHitbox =
-    VirtualHitbox(from, to).apply {
-        setQualifier { player, _ -> player.gameMode != GameMode.ADVENTURE }
-        addLeftClickHandler { player, _ ->
-            val ctx = Context.intention(BlockBreak)
-                .param(BlockBreak.BLOCK, block)
-                .param(BlockBreak.SOURCE_PLAYER, player)
-                .build()
-            BlockUtils.breakBlockNaturally(ctx)
+internal fun armHitboxes(coreHalf: Double, faces: Collection<BlockFace>): List<HitboxCuboid> = buildList {
+    val coreMin = 0.5 - coreHalf
+    add(HitboxCuboid(coreMin, coreMin, coreMin, coreHalf * 2, coreHalf * 2))
+
+    val length = 0.5 - coreHalf
+    for (face in faces) {
+        when (face) {
+            BlockFace.UP -> add(HitboxCuboid(ARM_MIN, 0.5 + coreHalf, ARM_MIN, ARM_SIZE, length))
+            BlockFace.DOWN -> add(HitboxCuboid(ARM_MIN, 0.0, ARM_MIN, ARM_SIZE, length))
+            else -> {
+                val start = if (face.modX + face.modZ > 0) 0.5 + coreHalf else 0.0
+                // overlapping cubes rather than a gap: the last one ends flush with the block edge
+                val count = ceil(length / ARM_SIZE).toInt()
+                for (i in 0..<count) {
+                    val along = start + (length - ARM_SIZE) * i / max(1, count - 1)
+                    add(
+                        if (face.modX != 0) HitboxCuboid(along, ARM_MIN, ARM_MIN, ARM_SIZE, ARM_SIZE)
+                        else HitboxCuboid(ARM_MIN, ARM_MIN, along, ARM_SIZE, ARM_SIZE)
+                    )
+                }
+            }
         }
     }
+}

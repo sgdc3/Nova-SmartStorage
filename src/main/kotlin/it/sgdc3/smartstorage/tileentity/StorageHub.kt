@@ -246,9 +246,10 @@ abstract class StorageHub(
     /**
      * One box per port, matching the flange in the model — its own numbers, divided by 16.
      *
-     * Right-click only. Breaking is left to the chain behind the model so that hardness and tool still
-     * mean something, which a virtual hitbox cannot do: Minecraft runs its mining timer against real
-     * blocks, so a hitbox that breaks on click breaks instantly.
+     * Right-click only, and virtual because which sides are ports is not block state, so the native
+     * hitboxes Nova builds from block state cannot know. Breaking goes through those — the core and the
+     * arms, see [it.sgdc3.smartstorage.registry.Blocks] — because a virtual hitbox cannot run Minecraft's
+     * mining timer and would break the hub instantly.
      */
     private fun rebuildHitboxes() {
         hitboxes.forEach(Hitbox<*, *>::remove)

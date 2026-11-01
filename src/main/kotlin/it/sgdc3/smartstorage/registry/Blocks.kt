@@ -17,8 +17,10 @@ import it.sgdc3.smartstorage.tileentity.StorageController
 import it.sgdc3.smartstorage.tileentity.StorageInterface
 import it.sgdc3.smartstorage.tileentity.StorageTerminal
 import it.sgdc3.smartstorage.tileentity.WirelessAccessPoint
+import it.sgdc3.smartstorage.util.armHitboxes
 import it.sgdc3.smartstorage.util.encodeFlags
 import org.bukkit.Axis
+import org.bukkit.block.BlockFace
 import org.bukkit.block.BlockType
 import org.bukkit.block.data.BlockData
 import xyz.xenondevs.nova.initialize.Init
@@ -54,9 +56,11 @@ object Blocks {
         )
 
         entityBacked(stateSelector = {
-            // a chain gives straight runs a sensible collider; everything else relies on the virtual
-            // hitboxes StorageCable registers, so the block itself must not block movement
+            // a chain gives straight runs a sensible collider; anywhere else the cable must not block
+            // movement, and is reached through the hitboxes below
             chainOrVoid()
+        }, extraHitboxSelector = {
+            armHitboxes(coreHalf = 2.0 / 16.0, occupiedFaces())
         }, modelSelector = {
             val id = encodeFlags(
                 getPropertyValueOrThrow(BlockStateProperties.NORTH),
@@ -208,6 +212,11 @@ object Blocks {
                 // or a port: a port reaches the block edge just as an arm does, so a connector between
                 // two chests earns its chain the same way one in the middle of a cable run does.
                 chainOrVoid()
+            }, extraHitboxSelector = {
+                // The core and an arm per occupied side, ports included: a port's neck is an arm, and its
+                // flange keeps the right-click hitbox StorageHub gives it, which still wins on a click
+                // because Nova hands a hit on these back to the block as an ordinary interaction.
+                armHitboxes(coreHalf = 4.0 / 16.0, occupiedFaces())
             }, modelSelector = {
                 if (coreModels != null) {
                     val lit = if (getPropertyValueOrThrow(BlockStateProperties.POWERED)) "" else "_off"
@@ -231,6 +240,19 @@ object Blocks {
                 getModel("block/cable/$id")
             })
         }
+
+    /**
+     * The sides a cable is connected on, or a hub has an arm or a port on.
+     */
+    private fun BlockSelectorScope.occupiedFaces(): List<BlockFace> =
+        listOf(
+            BlockFace.NORTH to BlockStateProperties.NORTH,
+            BlockFace.EAST to BlockStateProperties.EAST,
+            BlockFace.SOUTH to BlockStateProperties.SOUTH,
+            BlockFace.WEST to BlockStateProperties.WEST,
+            BlockFace.UP to BlockStateProperties.UP,
+            BlockFace.DOWN to BlockStateProperties.DOWN
+        ).filter { (_, property) -> getPropertyValueOrThrow(property) }.map { it.first }
 
     /**
      * What stands behind a cable or a hub: a chain along a run that passes straight through, the
